@@ -475,10 +475,21 @@ Vite with `base: '/GTDo-web/'`, hash router, static output.
 README: what it is, live link, that data is browser-local, Export/Import for moving to and from the
 macOS app, the keyboard divergence, and the storage-eviction caveat. MIT.
 
-## 11. Assumptions not yet verified
+## 11. Assumptions — measured 2026-07-28
 
-The browser-platform audit did not complete. These are **assumptions**, and the plan's first task
-verifies each before the affected code is written:
+**Settled. See `docs/assumptions.md` for the measurements; that file is authoritative where it and
+this section differ.** Summary: (1) PARTIAL — the page can see and `preventDefault` all three chords
+in every engine, but whether the browser chrome also acts is not testable through a driver, so the
+bare-key map stands. (2) CONFIRMED — measured quota is 5.00 GiB Chromium / 10.00 GiB Firefox /
+0.98 GiB WebKit, against localStorage's ~5 MB; Safari's 7-day eviction remains UNVERIFIABLE and its
+warnings stay. (3) CONFIRMED with a sharp edge — **Firefox never settles `persist()`** (permission
+prompt), so it must be fire-and-forget, never awaited; Chromium and WebKit both returned `false`.
+(4) and (6) UNVERIFIABLE without a real deployment and real private windows; neither changes code.
+(5) CONFIRMED — the built `index.html` emits `/GTDo-web/assets/…`, and a probe now guards it.
+
+One finding changed the plan (assumption 3, Task 14). None changed the architecture.
+
+The original list, for the record:
 
 1. `⌘N`, `⌘F` and `⌘,` cannot be reliably intercepted by a web page in current Safari, Chrome and
    Firefox — hence the bare-key map in §7. If any of the three *is* interceptable, that shortcut

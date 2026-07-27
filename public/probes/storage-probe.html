@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>storage probe</title>
+<body>
+<div id="out">pending</div>
+<script>
+  (async () => {
+    const result = {}
+    // Firefox shows a permission prompt for persistent-storage; with no user to
+    // answer it the promise never settles. Every await below is bounded so the
+    // probe reports "hung" as data instead of timing the whole run out.
+    const bounded = (p, ms, label) => Promise.race([
+      Promise.resolve(p).then((v) => ({ ok: true, v })),
+      new Promise((r) => setTimeout(() => r({ ok: false, timedOut: label }), ms)),
+    ])
+    result.hasIndexedDB = typeof indexedDB !== 'undefined'
+    try {
+      const db = await new Promise((res, rej) => {
+        const r = indexedDB.open('probe', 1)
+        r.onupgradeneeded = () => r.result.createObjectStore('s')
+        r.onsuccess = () => res(r.result)
+        r.onerror = () => rej(r.error)
+        r.onblocked = () => rej(new Error('blocked'))
+      })
+      // Write something so a quota-less environment fails here rather than silently.
+      await new Promise((res, rej) => {
+        const tx = db.transaction('s', 'readwrite')
+        tx.objectStore('s').put('x'.repeat(1024), 'k')
+        tx.oncomplete = () => res()
+        tx.onerror = () => rej(tx.error)
+      })
+      db.close()
+      result.indexedDBUsable = true
+    } catch (e) {
+      result.indexedDBUsable = false
+      result.indexedDBError = String((e && e.name) || e)
+    }
+
+    try {
+      localStorage.setItem('probe', 'x')
+      localStorage.removeItem('probe')
+      result.localStorageUsable = true
+    } catch (e) {
+      result.localStorageUsable = false
+      result.localStorageError = String((e && e.name) || e)
+    }
+
+    result.hasEstimate = !!(navigator.storage && navigator.storage.estimate)
+    if (result.hasEstimate) {
+      try {
+        const { quota, usage } = await navigator.storage.estimate()
+        result.quotaBytes = quota
+        result.usageBytes = usage
+        result.quotaGiB = quota ? +(quota / 1024 / 1024 / 1024).toFixed(2) : null
+      } catch (e) {
+        result.estimateThrew = String((e && e.name) || e)
+      }
+    }
+
+    result.hasPersist = !!(navigator.storage && navigator.storage.persist)
+    if (result.hasPersist) {
+      try {
+        const before = await bounded(navigator.storage.persisted(), 3000, 'persisted()')
+        result.persistedBefore = before.ok ? before.v : null
+        if (!before.ok) result.persistedTimedOut = true
+
+        const granted = await bounded(navigator.storage.persist(), 5000, 'persist()')
+        if (granted.ok) {
+          result.persistGranted = granted.v
+        } else {
+          // A prompt with nobody to answer it. In the real app this means the
+          // call must never be awaited on a path the UI blocks on.
+          result.persistTimedOut = true
+          result.persistGranted = null
+        }
+      } catch (e) {
+        result.persistThrew = String((e && e.name) || e)
+      }
+    }
+
+    document.getElementById('out').textContent = JSON.stringify(result)
+  })()
+</script>
+</body>

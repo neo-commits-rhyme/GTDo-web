@@ -1,0 +1,13 @@
+{
+  "browserName": "webkit",
+  "hasIndexedDB": true,
+  "indexedDBUsable": true,
+  "localStorageUsable": true,
+  "hasEstimate": true,
+  "quotaBytes": 1048576000,
+  "usageBytes": 1059,
+  "quotaGiB": 0.98,
+  "hasPersist": true,
+  "persistedBefore": false,
+  "persistGranted": false
+}

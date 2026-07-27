@@ -1,0 +1,14 @@
+{
+  "browserName": "firefox",
+  "hasIndexedDB": true,
+  "indexedDBUsable": true,
+  "localStorageUsable": true,
+  "hasEstimate": true,
+  "quotaBytes": 10737418240,
+  "usageBytes": 65536,
+  "quotaGiB": 10,
+  "hasPersist": true,
+  "persistedBefore": false,
+  "persistTimedOut": true,
+  "persistGranted": null
+}

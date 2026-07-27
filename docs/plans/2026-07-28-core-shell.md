@@ -1760,7 +1760,22 @@ it('schemaVersionIsRecordedInMeta', …)
 ```
 
 - [ ] **Step 2: Run to verify they fail** — expect FAIL.
-- [ ] **Step 3: Implement.** Four object stores — `data`, `snapshots`, `quarantine`, `meta`. `writeSnapshot` no-ops when the stamp exists, then prunes with `keepSet`. `requestPersistentStorage` calls `navigator.storage.persist()` guarded by a feature check, per `docs/assumptions.md`.
+- [ ] **Step 3: Implement.** Four object stores — `data`, `snapshots`, `quarantine`, `meta`. `writeSnapshot` no-ops when the stamp exists, then prunes with `keepSet`.
+
+**`requestPersistentStorage` must be fire-and-forget.** Measured (`docs/assumptions.md` §3): Firefox never settles the `persist()` promise — it raises a permission prompt — while Chromium and WebKit resolve `false`. Awaiting it hangs the caller. Required shape:
+
+```ts
+export function requestPersistentStorage(): void {
+  if (!navigator.storage?.persist) return
+  // Never awaited: Firefox leaves this pending behind a permission prompt.
+  void navigator.storage.persist().then(
+    (granted) => { persistedGranted = granted },
+    () => { persistedGranted = false },
+  )
+}
+```
+
+A denial is the normal case, so nothing in the app may depend on it succeeding.
 - [ ] **Step 4: Run to verify they pass** — expect PASS.
 - [ ] **Step 5: Commit**
 

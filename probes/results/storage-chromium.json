@@ -1,0 +1,13 @@
+{
+  "browserName": "chromium",
+  "hasIndexedDB": true,
+  "indexedDBUsable": true,
+  "localStorageUsable": true,
+  "hasEstimate": true,
+  "quotaBytes": 4294969611,
+  "usageBytes": 2315,
+  "quotaGiB": 4,
+  "hasPersist": true,
+  "persistedBefore": false,
+  "persistGranted": false
+}

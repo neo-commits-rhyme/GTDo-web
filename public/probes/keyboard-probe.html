@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>keyboard probe</title>
+<body>
+<input id="field" placeholder="focus trap for the in-field suppression check">
+<div id="out">{}</div>
+<script>
+  // Records, per modifier chord, whether the page received the keydown at all
+  // and whether preventDefault() was honoured. Whether the BROWSER also acted
+  // on it (new window, find bar) is asserted separately by the Playwright test,
+  // because a page cannot observe that from the inside.
+  const seen = {}
+  addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return
+    const name = (e.metaKey ? 'Meta+' : 'Ctrl+') + e.key
+    e.preventDefault()
+    seen[name] = { received: true, defaultPrevented: e.defaultPrevented, target: e.target.tagName }
+    document.getElementById('out').textContent = JSON.stringify(seen)
+  })
+</script>
+</body>

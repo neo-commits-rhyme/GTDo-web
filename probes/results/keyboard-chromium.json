@@ -1,0 +1,49 @@
+{
+  "browserName": "chromium",
+  "platform": "darwin",
+  "mod": "Meta",
+  "onBody": {
+    "Meta+Meta": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "BODY"
+    },
+    "Meta+n": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "BODY"
+    },
+    "Meta+f": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "BODY"
+    },
+    "Meta+,": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "BODY"
+    }
+  },
+  "withField": {
+    "Meta+Meta": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "INPUT"
+    },
+    "Meta+n": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "INPUT"
+    },
+    "Meta+f": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "INPUT"
+    },
+    "Meta+,": {
+      "received": true,
+      "defaultPrevented": true,
+      "target": "INPUT"
+    }
+  }
+}
