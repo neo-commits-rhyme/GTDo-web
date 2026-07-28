@@ -8,6 +8,7 @@
  */
 
 import type { ReactNode } from 'react'
+import { BuiltIn, type SmartView } from '../core/models'
 
 const GLYPHS: Record<string, ReactNode> = {
   'list.bullet': (
@@ -88,6 +89,72 @@ const GLYPHS: Record<string, ReactNode> = {
       <line x1="8" y1="3.4" x2="8" y2="12.6" />
     </>
   ),
+
+  // Fixed chrome: the built-in lists and smart views. Deliberately NOT in
+  // LIST_SYMBOLS — that vocabulary is the user-facing picker and is asserted
+  // equal to the Swift app's, so anything added there would drift interop.
+  // These are never stored; the sidebar picks them by id when a built-in list
+  // carries no symbol of its own, which every one of them does.
+  'gtdo.inbox': (
+    <>
+      <path d="M2 9.5V4a1 1 0 011-1h10a1 1 0 011 1v5.5" />
+      <path d="M2 9.5h3l1 2h4l1-2h3v3a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
+    </>
+  ),
+  'gtdo.waiting': (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.6V8l2.4 1.6" />
+    </>
+  ),
+  'gtdo.someday': <path d="M13.2 9.8A5.6 5.6 0 016.2 2.8a5.6 5.6 0 107 7z" />,
+  'gtdo.today': (
+    <>
+      <circle cx="8" cy="8" r="3.1" />
+      <path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.3 3.3l1.2 1.2M11.5 11.5l1.2 1.2M12.7 3.3l-1.2 1.2M4.5 11.5l-1.2 1.2" />
+    </>
+  ),
+  'gtdo.calendar': (
+    <>
+      <rect x="2" y="3.2" width="12" height="10.8" rx="1.2" />
+      <path d="M2 6.6h12M5.4 1.8v2.6M10.6 1.8v2.6" />
+    </>
+  ),
+  'gtdo.completed': (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M5.2 8.2l2 2 3.6-4" />
+    </>
+  ),
+  'gtdo.trash': (
+    <>
+      <path d="M2.6 4.3h10.8" />
+      <path d="M6.3 4.3V2.9a.9.9 0 01.9-.9h1.6a.9.9 0 01.9.9v1.4" />
+      <path d="M3.9 4.3l.6 8.3a1.1 1.1 0 001.1 1h4.8a1.1 1.1 0 001.1-1l.6-8.3" />
+      <path d="M6.7 6.8v4.4M9.3 6.8v4.4" />
+    </>
+  ),
+}
+
+/**
+ * The glyph a built-in list falls back to. They all store `symbol: null` —
+ * macOS seeds them that way and this must not diverge — so without this every
+ * one of them drew the same bullet list and the sidebar was a column of
+ * identical marks. A rendering default, never written to the document.
+ */
+export const BUILT_IN_SYMBOLS: Record<string, string> = {
+  [BuiltIn.inbox]: 'gtdo.inbox',
+  [BuiltIn.nextActions]: 'bolt',
+  [BuiltIn.waitingFor]: 'gtdo.waiting',
+  [BuiltIn.someday]: 'gtdo.someday',
+  [BuiltIn.notes]: 'book',
+}
+
+export const SMART_SYMBOLS: Record<SmartView, string> = {
+  today: 'gtdo.today',
+  calendar: 'gtdo.calendar',
+  completed: 'gtdo.completed',
+  trash: 'gtdo.trash',
 }
 
 /**

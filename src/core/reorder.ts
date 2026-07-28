@@ -20,7 +20,7 @@ export const GTD_BLOCK_IDS: readonly string[] = [
   BuiltIn.notes,
 ]
 
-const has = (ids: readonly string[], id: string) => ids.some((x) => sameID(x, id))
+export const has = (ids: readonly string[], id: string) => ids.some((x) => sameID(x, id))
 
 /** Stored order with stale ids dropped and missing ones appended in canonical
  *  order. Pure — it never mutates the data it reads. */
@@ -33,6 +33,18 @@ export function healOrder(stored: string[] | null, canonical: readonly string[])
 export type SidebarEntry =
   | { kind: 'list'; list: TaskList }
   | { kind: 'group'; group: ListGroup }
+
+/**
+ * Entries that live in gtdOrder but are drawn as their own sidebar sections.
+ *
+ * They stay in the stored order rather than being removed from it: gtdOrder is
+ * shared with the macOS app and the iPhone, and dropping an id here would have
+ * every other client heal it back to the end of its own block. This is a
+ * rendering split, not a data one.
+ */
+export const GTD_OWN_SECTION_IDS: readonly string[] = [BuiltIn.projectsGroup, BuiltIn.notes]
+
+export const entryID = (e: SidebarEntry): string => (e.kind === 'list' ? e.list.id : e.group.id)
 
 export function entryFor(
   id: string,

@@ -127,7 +127,9 @@ body {
 .nav__icon { display: flex; color: var(--ink-secondary); flex: none; }
 /* Smart views carry no list record and so no icon. Pad them by the icon's
    width so every label in the sidebar starts on the same vertical line. */
-.nav__item--smart { padding-left: calc(7px + 15px + 7px); }
+/* Trash lives at the foot, set off by a rule so it reads as somewhere you go
+   rather than another view in the list you work from. */
+.nav__group--foot { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--rule); }
 .nav__edit {
   background: none; border: 0; color: var(--ink-secondary); cursor: pointer;
   padding: 2px 5px; border-radius: 4px; opacity: 0;

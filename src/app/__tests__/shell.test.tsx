@@ -107,11 +107,15 @@ describe('Deadline token', () => {
 })
 
 describe('Shell', () => {
-  it('rendersTheFourSmartViewsInCaseIterableOrder', async () => {
+  it('rendersTheSmartViewsInCaseIterableOrderWithTrashAtTheFoot', async () => {
     await mount()
     const nav = screen.getByRole('navigation', { name: 'Lists' })
     const labels = within(nav).getAllByRole('button').map((b) => b.textContent)
-    expect(labels.slice(0, 4)).toEqual(['Today', 'Calendar', 'Completed', 'Trash'])
+    expect(labels.slice(0, 3)).toEqual(['Today', 'Calendar', 'Completed'])
+    // Trash is somewhere you go to recover something, not a view you work
+    // from, so it sits at the bottom rather than among the other three.
+    expect(labels).toContain('Trash')
+    expect(labels.indexOf('Trash')).toBeGreaterThan(labels.indexOf('Someday'))
   })
 
   it('rendersTheGTDBlockAndMyListsSections', async () => {
@@ -119,9 +123,15 @@ describe('Shell', () => {
     const nav = screen.getByRole('navigation', { name: 'Lists' })
     expect(within(nav).getByText('GTD')).toBeTruthy()
     expect(within(nav).getByText('My lists')).toBeTruthy()
-    for (const name of ['Inbox', 'Next actions', 'Waiting for...', 'Someday', 'Notes', 'Projects']) {
+    // Notes and Projects each name a heading AND a row, so match the rows by
+    // role rather than by text — getByText would find two nodes and throw.
+    for (const name of ['Inbox', 'Next actions', 'Waiting for...', 'Someday']) {
       expect(within(nav).getByText(name)).toBeTruthy()
     }
+    for (const name of ['Notes', 'Projects']) {
+      expect(within(nav).getByRole('heading', { name })).toBeTruthy()
+    }
+    expect(within(nav).getByRole('button', { name: /^Notes/ })).toBeTruthy()
   })
 
   it('addingATaskInTodayShowsItImmediately', async () => {

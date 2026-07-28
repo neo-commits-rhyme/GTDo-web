@@ -139,13 +139,16 @@ describe('Projects is its own section', () => {
     store.setListSymbol(BuiltIn.notes, null) // force a render
     const nav = await screen.findByRole('navigation', { name: 'Lists' })
     const headings = within(nav).getAllByRole('heading').map((h) => h.textContent)
-    expect(headings).toEqual(['GTD', 'Projects', 'My lists'])
+    expect(headings).toEqual(['GTD', 'Projects', 'Notes', 'My lists'])
 
     // The GTD group ends at Notes; Projects is not inside it.
     const gtdHeading = within(nav).getByText('GTD')
     const gtdGroup = gtdHeading.nextElementSibling as HTMLElement
-    expect(gtdGroup.textContent).toContain('Notes')
+    // Both are drawn as their own sections now, so neither belongs in the
+    // doing-lists block. Someday is the last thing left in it.
+    expect(gtdGroup.textContent).not.toContain('Notes')
     expect(gtdGroup.textContent).not.toContain('Projects')
+    expect(gtdGroup.textContent).toContain('Someday')
   })
 
   it('listsTheProjectsUnderItsOwnHeading', async () => {
@@ -173,15 +176,29 @@ describe('Projects is its own section', () => {
   })
 
   it('reorderStillMovesTheRightEntryDespiteTheFilteredRender', async () => {
-    // The buttons map back to the position in the full order; using the
-    // filtered index would move the wrong list once Projects is skipped.
+    // The buttons work in VISIBLE indices. Mapping them back into the full
+    // order would move relative to rows the user cannot see, so a move could
+    // step over a hidden section and appear to do nothing.
     const user = userEvent.setup()
     const { store } = await mount()
-    const before = store.healedGTDOrder()
-    await user.click(screen.getByRole('button', { name: 'Move Someday down' }))
+    await user.click(screen.getByRole('button', { name: 'Move Waiting for... down' }))
     const after = store.healedGTDOrder()
-    expect(after).not.toEqual(before)
-    // Someday moved past Notes, and nothing else changed position.
-    expect(after.indexOf(BuiltIn.someday)).toBeGreaterThan(after.indexOf(BuiltIn.notes))
+    expect(after.indexOf(BuiltIn.someday)).toBeLessThan(after.indexOf(BuiltIn.waitingFor))
+    // The hidden sections keep the slots they held, so the macOS order is
+    // disturbed no more than the visible move required.
+    expect(after).toHaveLength(5)
+    expect(after).toContain(BuiltIn.projectsGroup)
+    expect(after).toContain(BuiltIn.notes)
+  })
+
+  it('cannotMoveTheLastVisibleGTDRowPastAHiddenSection', async () => {
+    // Someday is last among the rows actually drawn. Before the buttons worked
+    // in visible indices, its Move down was enabled and swapped it past Notes
+    // in the stored order while the screen did not change at all.
+    const { store } = await mount()
+    const before = store.healedGTDOrder()
+    const down = screen.getByRole('button', { name: 'Move Someday down' }) as HTMLButtonElement
+    expect(down.disabled).toBe(true)
+    expect(store.healedGTDOrder()).toEqual(before)
   })
 })

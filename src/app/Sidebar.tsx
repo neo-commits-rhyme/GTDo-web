@@ -2,7 +2,7 @@ import { BuiltIn, SMART_VIEWS, sameID, sidebarItemsEqual, type SidebarItem, type
 import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { dragID } from './dnd/resolve'
-import { ListIcon } from './ListIcon'
+import { BUILT_IN_SYMBOLS, ListIcon, SMART_SYMBOLS } from './ListIcon'
 import { ListEditor } from './ListEditor'
 import { useStore, useStoreTick } from './useStore'
 
@@ -35,10 +35,11 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
       <li key={view}>
         <button
           type="button"
-          className={`nav__item nav__item--smart${isSelected(item) ? ' nav__item--selected' : ''}`}
+          className={`nav__item${isSelected(item) ? ' nav__item--selected' : ''}`}
           aria-current={isSelected(item) ? 'page' : undefined}
           onClick={() => onNavigate(item)}
         >
+          <span className="nav__icon"><ListIcon symbol={SMART_SYMBOLS[view]} /></span>
           <span className="nav__label">{SMART_LABELS[view]}</span>
         </button>
       </li>
@@ -62,20 +63,19 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
   }
 
   const allGTD = store.gtdSectionItems()
-  // Projects gets its own section rather than sitting among the GTD lists.
-  // It stays in gtdOrder so the macOS sidebar order is untouched — this is a
-  // rendering split, not a data one — which is why the reorder buttons map
-  // back to the position in the full order rather than the filtered one.
-  const gtdEntries = allGTD.filter((e) => !(e.kind === 'group' && sameID(e.group.id, BuiltIn.projectsGroup)))
+  // Projects and Notes each get their own section rather than sitting among the
+  // GTD lists. Both stay in gtdOrder so the macOS sidebar order is untouched —
+  // this is a rendering split, not a data one — and the reorder buttons work in
+  // visible indices, which is why they call moveVisibleGTDEntries rather than
+  // mapping a position back into an order containing rows nobody can see.
+  const gtdEntries = store.visibleGTDEntries()
   const projectsGroup = allGTD.find((e) => e.kind === 'group' && sameID(e.group.id, BuiltIn.projectsGroup))
-  const orderIndexOf = (id: string) =>
-    allGTD.findIndex((e) => sameID(e.kind === 'list' ? e.list.id : e.group.id, id))
   const userEntries = store.userSectionItems()
 
   return (
     <nav className="nav" aria-label="Lists">
       <ul className="nav__group">
-        {SMART_VIEWS.map(smartLink)}
+        {SMART_VIEWS.filter((v) => v !== 'trash').map(smartLink)}
       </ul>
 
       <h2 className="nav__heading">GTD</h2>
@@ -85,7 +85,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
             lists[0] is any list at all — which rendered that list twice and
             left Inbox with no row anywhere. */}
         {listLink(BuiltIn.inbox)}
-        {gtdEntries.map((entry) =>
+        {gtdEntries.map((entry, i) =>
           entry.kind === 'list' ? (
             <li key={entry.list.id}>
               <ListRow
@@ -97,9 +97,9 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
               />
               <ReorderButtons
                 label={entry.list.name}
-                index={orderIndexOf(entry.list.id)}
-                count={allGTD.length}
-                onMove={(from, to) => store.moveGTDEntries([from], to)}
+                index={i}
+                count={gtdEntries.length}
+                onMove={(from, to) => store.moveVisibleGTDEntries([from], to)}
               />
             </li>
           ) : null,
@@ -119,6 +119,14 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
           </ul>
         </>
       )}
+
+      {/* Notes is reference material, not something you act on, so it reads
+          better below the doing-lists than among them. A one-row section
+          rather than a bare row keeps it parallel with Projects. */}
+      <h2 className="nav__heading">Notes</h2>
+      <ul className="nav__group">
+        {listLink(BuiltIn.notes)}
+      </ul>
 
       <h2 className="nav__heading">My lists</h2>
       <ul className="nav__group">
@@ -157,6 +165,12 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
         )}
       </ul>
 
+      {/* Trash sits at the bottom, away from the views you navigate by. It is
+          somewhere you go to recover something, not somewhere you work. */}
+      <ul className="nav__group nav__group--foot">
+        {smartLink('trash')}
+      </ul>
+
       <NewListButton />
       {editing !== null && <ListEditor listID={editing} onClose={() => setEditing(null)} />}
     </nav>
@@ -192,7 +206,9 @@ function ListRow({
           className="nav__icon"
           style={list.colorHex === null ? undefined : ({ color: list.colorHex } as React.CSSProperties)}
         >
-          <ListIcon symbol={list.symbol} />
+          {/* Built-ins all store symbol: null, matching macOS, so the icon
+              they show is chosen here by id rather than written to the file. */}
+          <ListIcon symbol={list.symbol ?? BUILT_IN_SYMBOLS[list.id] ?? null} />
         </span>
         <span className="nav__label">{list.name}</span>
         <span className="nav__count">{count || ''}</span>

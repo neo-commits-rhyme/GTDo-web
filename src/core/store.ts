@@ -14,7 +14,10 @@ import {
 } from './models'
 import { nextOccurrence } from './recurrence'
 import { searchResults, type SearchOptions } from './search'
-import { entryFor, GTD_BLOCK_IDS, healOrder, moveWithinArray, type SidebarEntry } from './reorder'
+import {
+  entryFor, entryID, GTD_BLOCK_IDS, GTD_OWN_SECTION_IDS, has, healOrder, moveWithinArray,
+  type SidebarEntry,
+} from './reorder'
 import { makeSampleData } from './seed'
 
 export { COMPLETION_HOLD_WINDOW_MS } from './storeBase'
@@ -622,6 +625,35 @@ export class AppStore extends StoreBase {
 
   moveGTDEntries(from: number[], destination: number): void {
     this.data.gtdOrder = moveWithinArray(this.healedGTDOrder(), from, destination)
+    this.persist()
+  }
+
+  /**
+   * The GTD block as the sidebar actually draws it. Projects and Notes each get
+   * their own section, so they are not among these.
+   */
+  visibleGTDEntries(): SidebarEntry[] {
+    return this.gtdSectionItems().filter((e) => !has(GTD_OWN_SECTION_IDS, entryID(e)))
+  }
+
+  /**
+   * Reorder from indices into `visibleGTDEntries()`.
+   *
+   * Mapping a visible index back into the full order and calling
+   * moveGTDEntries does NOT work: the destination would land relative to
+   * entries the user cannot see, so dragging the last visible row down would
+   * step over a hidden section and appear to do nothing. The move happens among
+   * the visible ids, then each hidden id goes back at the index it held.
+   */
+  moveVisibleGTDEntries(from: number[], destination: number): void {
+    const order = this.healedGTDOrder()
+    const hidden = order
+      .map((id, index) => ({ id, index }))
+      .filter(({ id }) => has(GTD_OWN_SECTION_IDS, id))
+    const moved = moveWithinArray(order.filter((id) => !has(GTD_OWN_SECTION_IDS, id)), from, destination)
+    // Ascending, so each insertion leaves the later recorded indices valid.
+    for (const { id, index } of hidden) moved.splice(Math.min(index, moved.length), 0, id)
+    this.data.gtdOrder = moved
     this.persist()
   }
 
