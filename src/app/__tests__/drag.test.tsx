@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppStore } from '../../core/store'
 import { MemoryAdapter } from '../../storage/memoryAdapter'
@@ -167,5 +167,37 @@ describe('The keyboard paths are as reversible as the drag ones', () => {
     expect(store.task(t.id)!.isTrashed).toBe(true)
     undo.undo(store)
     expect(store.task(t.id)!.isTrashed).toBe(false)
+  })
+})
+
+describe('The render fingerprint covers every renderable change', () => {
+  /** Renders the current list and reports its titles. */
+  const titles = () =>
+    Array.from(document.querySelectorAll('.row__title')).map((e) => e.textContent)
+
+  it('movingATaskBetweenListsReRenders', async () => {
+    // listID was absent from the fingerprint, so an undo that moved a task
+    // back into the visible list changed nothing on screen.
+    const { store } = await mount()
+    const t = store.addTask('wanderer', { kind: 'list', id: BuiltIn.notes })!
+    store.setSelection({ kind: 'list', id: BuiltIn.notes })
+    expect(await screen.findByText('wanderer')).toBeTruthy()
+
+    act(() => { store.moveTask(t.id, BuiltIn.someday) })
+    expect(titles()).not.toContain('wanderer')
+
+    act(() => { store.moveTask(t.id, BuiltIn.notes) })
+    expect(titles()).toContain('wanderer')
+  })
+
+  it('renamingToASameLengthTitleReRenders', async () => {
+    // title.length is not the title.
+    const { store } = await mount()
+    const t = store.addTask('aaaa', { kind: 'list', id: BuiltIn.notes })!
+    store.setSelection({ kind: 'list', id: BuiltIn.notes })
+    expect(await screen.findByText('aaaa')).toBeTruthy()
+
+    act(() => { store.renameTask(t.id, 'bbbb') })
+    expect(titles()).toEqual(['bbbb'])
   })
 })

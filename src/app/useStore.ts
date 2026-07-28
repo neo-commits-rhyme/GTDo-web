@@ -54,29 +54,54 @@ function tick(store: AppStore): number {
   return state.n
 }
 
+/** djb2. Cheap, and unlike a length it actually changes when the content does. */
+function hash(text: string): number {
+  let h = 5381
+  for (let i = 0; i < text.length; i += 1) h = ((h << 5) + h + text.charCodeAt(i)) | 0
+  return h
+}
+
+/**
+ * A cheap value that changes whenever anything renderable changes.
+ *
+ * Three bugs came from this being an under-specified sum: `selection` was
+ * missing, so changing view never re-rendered; `order` was summed unweighted,
+ * so a reorder — being a permutation — left the total identical; and `listID`
+ * was absent with `title` reduced to its length, so moving a task between
+ * lists, or renaming it to a same-length title, did nothing.
+ *
+ * Hashing the mutable fields by position kills that whole class.
+ */
 function fingerprintOf(store: AppStore): string {
-  // Cheap but sufficient: any mutation changes at least one of these.
   const t = store.data.tasks
   return [
     t.length,
     store.data.lists.length,
     store.data.groups.length,
     store.searchQuery,
-    // Selection must be here: changing view is not a persisted mutation, and
-    // without it the list never re-renders when you navigate.
-    store.selection === null ? '' : store.selection.kind === 'smart' ? store.selection.view : store.selection.id,
+    store.selection === null
+      ? ''
+      : store.selection.kind === 'smart' ? store.selection.view : store.selection.id,
     store.selectedTaskID ?? '',
     store.saveError?.message ?? '',
     store.pendingDeadline === null ? '' : store.pendingDeadline.kind,
     store.recentlyCompleted.size,
-    // Field edits change no length, so fold the mutable fields in — weighted by
-    // position, because a reorder is a permutation and an unweighted sum of
-    // `order` is identical before and after it. That cost a silent
-    // never-re-renders bug.
-    t.reduce((acc, x, i) => acc + (i + 1) * (x.order + 1) + x.title.length + x.note.length +
-      (x.isCompleted ? 1 : 0) + (x.isTrashed ? 2 : 0) +
-      (x.dueDate?.getTime() ?? 0) + (x.reminderDate?.getTime() ?? 0) +
-      (x.repeatRule === null ? 0 : x.repeatRule.interval + x.repeatRule.unit.length), 0),
-    store.data.lists.reduce((acc, l) => acc + l.name.length + l.order + (l.colorHex?.length ?? 0) + (l.symbol?.length ?? 0), 0),
+    t.reduce(
+      (acc, x, i) =>
+        (acc +
+          (i + 1) *
+            (x.order + 1 + hash(x.id) + hash(x.listID) + hash(x.title) + hash(x.note) +
+              (x.isCompleted ? 1 : 0) + (x.isTrashed ? 2 : 0) +
+              (x.dueDate?.getTime() ?? 0) + (x.reminderDate?.getTime() ?? 0) +
+              (x.completedAt?.getTime() ?? 0) +
+              (x.repeatRule === null ? 0 : x.repeatRule.interval + hash(x.repeatRule.unit)))) |
+        0,
+      0,
+    ),
+    store.data.lists.reduce(
+      (acc, l) => (acc + hash(l.id) + hash(l.name) + l.order + hash(l.colorHex ?? '') + hash(l.symbol ?? '')) | 0,
+      0,
+    ),
+    store.data.groups.reduce((acc, g) => (acc + hash(g.id) + hash(g.name) + g.order) | 0, 0),
   ].join('|')
 }

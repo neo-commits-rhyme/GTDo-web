@@ -94,18 +94,29 @@ and permanent deletion — and a reflex must never do something unrecoverable.
 Anything reversible offers an undo for eight seconds, and `⌘Z` / `Ctrl+Z` works
 for that whole window so you never have to catch a disappearing button.
 
+## Inbox Review
+
+**Review** on the Inbox walks your captured items one at a time: Next actions,
+Defer, File, make it a project, or Skip — then a second question, then the next
+task. `1`/`2`/`3` pick the current step's choices, `Esc` goes back a step and
+leaves at the top. A whole inbox can be triaged without the pointer.
+
+Skip sends a task to the back of the queue rather than counting it as done, so
+the progress readout stays honest. Delete, File and *Make it a project* have no
+shortcut: a reflex should not reach an unconfirmed delete, and the two pickers
+need a decision no keystroke can express. Every action is undoable.
+
 ## Not here yet
 
-Sub-projects 1–3 of five. Still to come: Inbox Review (4), and reminders plus
-offline install (5). Reminders will always be weaker than the macOS app's — a
-web page cannot wake itself up without a push server, and this one deliberately
-has no server.
+Sub-projects 1–4 of five. Still to come: reminders plus offline install (5).
+Reminders will always be weaker than the macOS app's — a web page cannot wake
+itself up without a push server, and this one deliberately has no server.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 432 unit tests
+npm test          # 471 unit tests
 npm run dev
 npm run build
 ```
