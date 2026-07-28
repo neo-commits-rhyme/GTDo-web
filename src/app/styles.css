@@ -109,6 +109,38 @@ body {
 .nav__label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav__label--group { font-weight: 640; padding: 4px 7px; display: inline-block; }
 .nav__count { color: var(--ink-secondary); font-variant-numeric: tabular-nums; font-size: 11px; }
+/* The icon inherits the list tint via an inline colour; with no tint it stays
+   secondary ink so an uncustomised list is quiet rather than black. */
+.nav__icon { display: flex; color: var(--ink-secondary); flex: none; }
+.nav__edit {
+  background: none; border: 0; color: var(--ink-secondary); cursor: pointer;
+  padding: 2px 5px; border-radius: 4px; opacity: 0;
+  transition: opacity var(--spring-standard);
+}
+.nav__group > li:hover .nav__edit, .nav__edit:focus-visible { opacity: 1; }
+.nav__edit:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+
+.swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 4px; }
+.swatch {
+  aspect-ratio: 1; border-radius: 50%; border: 2px solid transparent;
+  background: var(--swatch); cursor: pointer; display: grid; place-items: center;
+  box-shadow: inset 0 0 0 1px var(--swatch-ring);
+  transition: transform var(--spring-press);
+}
+.swatch:active { transform: scale(var(--press-scale)); }
+.swatch--selected { border-color: var(--ink); }
+/* Colour alone may not indicate selection — least of all in a colour picker. */
+.swatch__check { color: var(--swatch-ink); font-size: 13px; font-weight: 700; }
+
+.icons { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.icon-choice {
+  aspect-ratio: 1; display: grid; place-items: center; cursor: pointer;
+  background: none; color: var(--ink-secondary);
+  border: 1px solid var(--rule); border-radius: 6px;
+  transition: transform var(--spring-press);
+}
+.icon-choice:active { transform: scale(var(--press-scale)); }
+.icon-choice--selected { border-color: var(--ink); color: var(--ink); background: var(--selection); }
 
 .nav__reorder { display: flex; opacity: 0; transition: opacity var(--spring-standard); }
 .nav__group > li:hover .nav__reorder, .nav__reorder:focus-within { opacity: 1; }

@@ -27,3 +27,16 @@ export function contrastRatio(a: string, b: string): number {
   const lo = Math.min(la, lb)
   return (hi + 0.05) / (lo + 0.05)
 }
+
+/**
+ * The more readable of black or white on a given background.
+ *
+ * A fixed white checkmark on the twelve list swatches fails badly on the
+ * yellow and mint ones; this picks per swatch, and the test asserts every
+ * result clears 4.5:1.
+ */
+export function readableInkOn(background: string): '#FFFFFF' | '#1A1A1A' {
+  return contrastRatio('#FFFFFF', background) >= contrastRatio('#1A1A1A', background)
+    ? '#FFFFFF'
+    : '#1A1A1A'
+}

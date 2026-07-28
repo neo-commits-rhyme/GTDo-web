@@ -103,3 +103,37 @@ describe('Stylesheet discipline', () => {
     }
   })
 })
+
+describe('Swatch legibility', () => {
+  it('everySwatchCheckmarkClearsNonTextContrast', async () => {
+    // A fixed white tick fails badly on the yellow and mint swatches;
+    // readableInkOn picks per swatch.
+    //
+    // The floor is 3:1, not 4.5:1: the tick is a non-text graphical indicator
+    // of state (WCAG 1.4.11), and it is never the only one — the swatch also
+    // carries a ring. Blue #007AFF is the worst case in the palette and clears
+    // neither 4.5:1 option, which is how the right standard got identified.
+    const { LIST_COLORS } = await import('../listPalette')
+    const { readableInkOn } = await import('../contrast')
+    for (const c of LIST_COLORS) {
+      const ink = readableInkOn(c.hex)
+      const ratio = contrastRatio(ink, c.hex)
+      expect(ratio, `${c.name} ${c.hex} with ${ink} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(3.0)
+    }
+  })
+
+  it('readableInkPicksTheBetterOfTheTwoEveryTime', async () => {
+    const { LIST_COLORS } = await import('../listPalette')
+    const { readableInkOn } = await import('../contrast')
+    for (const c of LIST_COLORS) {
+      const chosen = contrastRatio(readableInkOn(c.hex), c.hex)
+      const other = Math.min(contrastRatio('#FFFFFF', c.hex), contrastRatio('#1A1A1A', c.hex))
+      expect(chosen, c.name).toBeGreaterThanOrEqual(other)
+    }
+  })
+
+  it('aFixedWhiteTickWouldHaveFailed', () => {
+    // Documents why readableInkOn exists rather than a constant.
+    expect(contrastRatio('#FFFFFF', '#FFCC00')).toBeLessThan(2)
+  })
+})

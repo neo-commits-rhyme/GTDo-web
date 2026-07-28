@@ -34,6 +34,7 @@
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
   --scrim: rgb(0 0 0 / 40%);
+  --swatch-ring: rgb(0 0 0 / 12%);
 
   --serif: 'GTDo Serif', ui-serif, Georgia, serif;
   --sans: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif;
@@ -62,6 +63,7 @@
     --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
     --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
     --scrim: rgb(0 0 0 / 60%);
+    --swatch-ring: rgb(255 255 255 / 16%);
   }
 }
 
@@ -81,6 +83,7 @@
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
   --scrim: rgb(0 0 0 / 40%);
+  --swatch-ring: rgb(0 0 0 / 12%);
 }
 
 :root[data-theme='dark'] {
@@ -97,6 +100,7 @@
   --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
   --scrim: rgb(0 0 0 / 60%);
+  --swatch-ring: rgb(255 255 255 / 16%);
 }
 
 /* Feedback is reduced, never removed — the rule the Swift honours. Because the
