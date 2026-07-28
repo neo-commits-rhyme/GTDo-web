@@ -123,15 +123,13 @@ describe('Shell', () => {
     const nav = screen.getByRole('navigation', { name: 'Lists' })
     expect(within(nav).getByText('GTD')).toBeTruthy()
     expect(within(nav).getByText('My lists')).toBeTruthy()
-    // Notes and Projects each name a heading AND a row, so match the rows by
-    // role rather than by text — getByText would find two nodes and throw.
-    for (const name of ['Inbox', 'Next actions', 'Waiting for...', 'Someday']) {
+    for (const name of ['Inbox', 'Next actions', 'Waiting for...', 'Someday', 'Notes']) {
       expect(within(nav).getByText(name)).toBeTruthy()
     }
-    for (const name of ['Notes', 'Projects']) {
-      expect(within(nav).getByRole('heading', { name })).toBeTruthy()
-    }
-    expect(within(nav).getByRole('button', { name: /^Notes/ })).toBeTruthy()
+    // Reference holds the Notes list; Projects holds the project lists. The
+    // heading never repeats the name of the row beneath it.
+    expect(within(nav).getByRole('heading', { name: 'Reference' })).toBeTruthy()
+    expect(within(nav).getByRole('heading', { name: 'Projects' })).toBeTruthy()
   })
 
   it('addingATaskInTodayShowsItImmediately', async () => {

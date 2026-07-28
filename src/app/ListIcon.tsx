@@ -101,17 +101,27 @@ const GLYPHS: Record<string, ReactNode> = {
       <path d="M2 9.5h3l1 2h4l1-2h3v3a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
     </>
   ),
+  // hourglass, matching the macOS icon(for:) choice.
   'gtdo.waiting': (
     <>
-      <circle cx="8" cy="8" r="6" />
-      <path d="M8 4.6V8l2.4 1.6" />
+      <path d="M4 1.8h8M4 14.2h8" />
+      <path d="M4.8 1.8v2.4L8 8l-3.2 3.8v2.4M11.2 1.8v2.4L8 8l3.2 3.8v2.4" />
     </>
   ),
-  'gtdo.someday': <path d="M13.2 9.8A5.6 5.6 0 016.2 2.8a5.6 5.6 0 107 7z" />,
-  'gtdo.today': (
+  // archivebox, matching macOS.
+  'gtdo.someday': (
     <>
-      <circle cx="8" cy="8" r="3.1" />
-      <path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.3 3.3l1.2 1.2M11.5 11.5l1.2 1.2M12.7 3.3l-1.2 1.2M4.5 11.5l-1.2 1.2" />
+      <rect x="1.8" y="2.2" width="12.4" height="3.2" rx="0.8" />
+      <path d="M3 5.4v7a1.2 1.2 0 001.2 1.2h7.6A1.2 1.2 0 0013 12.4v-7" />
+      <path d="M6.4 8.4h3.2" />
+    </>
+  ),
+  // note.text, matching macOS — a sheet with ruled lines.
+  'gtdo.notes': (
+    <>
+      <path d="M2.6 2.6a1 1 0 011-1h6.2l3.6 3.6v7.2a1 1 0 01-1 1H3.6a1 1 0 01-1-1z" />
+      <path d="M9.6 1.6v3.6h3.6" />
+      <path d="M5 8h6M5 10.6h4" />
     </>
   ),
   'gtdo.calendar': (
@@ -147,11 +157,11 @@ export const BUILT_IN_SYMBOLS: Record<string, string> = {
   [BuiltIn.nextActions]: 'bolt',
   [BuiltIn.waitingFor]: 'gtdo.waiting',
   [BuiltIn.someday]: 'gtdo.someday',
-  [BuiltIn.notes]: 'book',
+  [BuiltIn.notes]: 'gtdo.notes',
 }
 
 export const SMART_SYMBOLS: Record<SmartView, string> = {
-  today: 'gtdo.today',
+  today: 'star',
   calendar: 'gtdo.calendar',
   completed: 'gtdo.completed',
   trash: 'gtdo.trash',

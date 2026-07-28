@@ -139,7 +139,7 @@ describe('Projects is its own section', () => {
     store.setListSymbol(BuiltIn.notes, null) // force a render
     const nav = await screen.findByRole('navigation', { name: 'Lists' })
     const headings = within(nav).getAllByRole('heading').map((h) => h.textContent)
-    expect(headings).toEqual(['GTD', 'Projects', 'Notes', 'My lists'])
+    expect(headings).toEqual(['GTD', 'Projects', 'Reference', 'My lists'])
 
     // The GTD group ends at Notes; Projects is not inside it.
     const gtdHeading = within(nav).getByText('GTD')

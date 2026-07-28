@@ -4,9 +4,9 @@
   "indexedDBUsable": true,
   "localStorageUsable": true,
   "hasEstimate": true,
-  "quotaBytes": 5368711435,
+  "quotaBytes": 4294969611,
   "usageBytes": 2315,
-  "quotaGiB": 5,
+  "quotaGiB": 4,
   "hasPersist": true,
   "persistedBefore": false,
   "persistGranted": false

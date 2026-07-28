@@ -121,9 +121,13 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
       )}
 
       {/* Notes is reference material, not something you act on, so it reads
-          better below the doing-lists than among them. A one-row section
-          rather than a bare row keeps it parallel with Projects. */}
-      <h2 className="nav__heading">Notes</h2>
+          better below the doing-lists than among them.
+          The heading says Reference, not Notes: the section holds exactly one
+          list, already called Notes, and a NOTES / Notes pair reads as a
+          stutter. Reference is also what GTD calls this material. Dropping the
+          heading instead was worse — with nothing between them the row looks
+          like it belongs to Projects. */}
+      <h2 className="nav__heading">Reference</h2>
       <ul className="nav__group">
         {listLink(BuiltIn.notes)}
       </ul>
