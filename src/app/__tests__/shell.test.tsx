@@ -6,6 +6,8 @@ import { MemoryAdapter } from '../../storage/memoryAdapter'
 import { BuiltIn } from '../../core/models'
 import { StoreContext } from '../useStore'
 import { RootShell } from '../RootShell'
+import { UndoContext } from '../undo/useUndo'
+import { UndoCenter } from '../../core/undo'
 import { breakpointFor } from '../useBreakpoint'
 import { deadlineToken } from '../format'
 import { parseRoute, routeFor } from '../router'
@@ -31,7 +33,9 @@ async function mount(opts: { width?: number; scheduler?: (ms: number, fn: () => 
   })
   const view = render(
     <StoreContext.Provider value={store}>
-      <RootShell />
+      <UndoContext.Provider value={new UndoCenter(() => {})}>
+        <RootShell />
+      </UndoContext.Provider>
     </StoreContext.Provider>,
   )
   return { store, view }
@@ -245,7 +249,9 @@ describe('Save failure', () => {
     })
     render(
       <StoreContext.Provider value={store}>
-        <RootShell />
+        <UndoContext.Provider value={new UndoCenter(() => {})}>
+          <RootShell />
+        </UndoContext.Provider>
       </StoreContext.Provider>,
     )
     store.addTask('anything', { kind: 'smart', view: 'today' })

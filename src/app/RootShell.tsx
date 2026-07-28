@@ -14,6 +14,8 @@ import { useShortcuts } from './useShortcuts'
 import { useStore, useStoreTick } from './useStore'
 import { useTheme } from './theme/useTheme'
 import { useAccent } from './theme/useAccent'
+import { UndoBar } from './undo/UndoBar'
+import { useUndoCenter } from './undo/useUndo'
 
 /**
  * Layout A: sidebar 240 | task list | detail.
@@ -38,8 +40,10 @@ export function RootShell() {
   const [theme, setTheme] = useTheme()
   const [accent, setAccent] = useAccent()
 
+  const undo = useUndoCenter()
+
   const openSettings = useCallback(() => setSettingsOpen(true), [])
-  useShortcuts(navigate, openSettings)
+  useShortcuts(navigate, openSettings, undo)
 
   const detailID = store.selectedTaskID !== null && store.task(store.selectedTaskID) !== null
     ? store.selectedTaskID
@@ -91,6 +95,7 @@ export function RootShell() {
         </div>
       )}
 
+      <UndoBar />
       <DeadlinePrompt />
       {settingsOpen && (
         <SettingsSheet

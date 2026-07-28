@@ -3,8 +3,12 @@ import { AppStore } from './core/store'
 import { IndexedDbAdapter, requestPersistentStorage } from './storage/indexedDbAdapter'
 import { RootShell } from './app/RootShell'
 import { StoreContext } from './app/useStore'
+import { UndoContext } from './app/undo/useUndo'
+import { UndoCenter } from './core/undo'
 import { autoEmptyTrashEnabled } from './app/SettingsSheet'
 import './app/styles.css'
+
+const undoCentre = new UndoCenter()
 
 export function App() {
   const [store, setStore] = useState<AppStore | null>(null)
@@ -31,7 +35,9 @@ export function App() {
 
   return (
     <StoreContext.Provider value={store}>
-      <RootShell />
+      <UndoContext.Provider value={undoCentre}>
+        <RootShell />
+      </UndoContext.Provider>
     </StoreContext.Provider>
   )
 }

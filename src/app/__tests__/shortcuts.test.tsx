@@ -6,6 +6,8 @@ import { MemoryAdapter } from '../../storage/memoryAdapter'
 import { BuiltIn } from '../../core/models'
 import { StoreContext } from '../useStore'
 import { RootShell } from '../RootShell'
+import { UndoContext } from '../undo/useUndo'
+import { UndoCenter } from '../../core/undo'
 import { exportBytes, importText, ImportError } from '../transfer'
 import { encodeAppData } from '../../core/codec'
 import { seededAppData } from '../../core/models'
@@ -20,7 +22,9 @@ async function mount() {
   })
   render(
     <StoreContext.Provider value={store}>
-      <RootShell />
+      <UndoContext.Provider value={new UndoCenter(() => {})}>
+        <RootShell />
+      </UndoContext.Provider>
     </StoreContext.Provider>,
   )
   return store

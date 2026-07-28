@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BuiltIn, type SidebarItem } from '../core/models'
 import { useStore } from './useStore'
+import type { UndoCenter } from '../core/undo'
 
 /**
  * Bare keys, not ⌘-chords.
@@ -14,7 +15,11 @@ import { useStore } from './useStore'
  * while a text field is focused, so the browser will not do the suppression
  * for us.
  */
-export function useShortcuts(navigate: (item: SidebarItem) => void, openSettings: () => void) {
+export function useShortcuts(
+  navigate: (item: SidebarItem) => void,
+  openSettings: () => void,
+  undo: UndoCenter,
+) {
   const store = useStore()
 
   useEffect(() => {
@@ -32,6 +37,18 @@ export function useShortcuts(navigate: (item: SidebarItem) => void, openSettings
         if (store.selectedTaskID !== null) store.setSelectedTask(null)
         else if (store.searchQuery !== '') store.setSearchQuery('')
         else if (typing) (target as HTMLElement).blur()
+        return
+      }
+
+      // Cmd/Ctrl+Z is one of the few chords worth attempting: unlike Cmd+N,
+      // browsers do not own it outside a text field — and the check above has
+      // already returned if one is focused.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (typing) return
+        if (undo.pending !== null) {
+          e.preventDefault()
+          undo.undo(store)
+        }
         return
       }
 
@@ -83,5 +100,5 @@ export function useShortcuts(navigate: (item: SidebarItem) => void, openSettings
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [store, navigate, openSettings])
+  }, [store, navigate, openSettings, undo])
 }
