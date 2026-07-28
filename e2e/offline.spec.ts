@@ -15,10 +15,15 @@ test('the app opens and keeps working with the network cut', async ({ page, cont
   await page.getByRole('button', { name: 'Add' }).click()
   await expect(page.getByText('survives offline')).toBeVisible()
 
-  // Wait for the worker to be in control before pulling the plug.
-  await page.evaluate(async () => {
-    if ('serviceWorker' in navigator) await navigator.serviceWorker.ready
-  })
+  // Wait for the worker to be CONTROLLING before pulling the plug. Awaiting
+  // serviceWorker.ready is unbounded — if registration silently failed it never
+  // resolves, and the test times out instead of saying what went wrong.
+  await expect
+    .poll(
+      () => page.evaluate(() => 'serviceWorker' in navigator && !!navigator.serviceWorker.controller),
+      { timeout: 15_000, message: 'the service worker never took control' },
+    )
+    .toBe(true)
 
   await context.setOffline(true)
   await page.reload()

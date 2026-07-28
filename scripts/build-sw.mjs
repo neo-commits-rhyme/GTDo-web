@@ -29,7 +29,13 @@ self.addEventListener('install', (event) => {
   // Take over immediately rather than waiting for every tab to close: a user
   // who reloads after a deploy should get the new build, not the old one.
   self.skipWaiting()
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)))
+  // Not addAll: it is atomic, so a single 404 aborts the whole install and
+  // the worker never activates — offline dies entirely because one asset moved.
+  // Settle each one instead and cache whatever is actually there.
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE)
+    await Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
+  })())
 })
 
 self.addEventListener('activate', (event) => {

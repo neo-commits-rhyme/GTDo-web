@@ -89,3 +89,30 @@ describe('The service worker', () => {
     expect(sw).toContain('url.origin !== self.location.origin')
   })
 })
+
+describe('Install resilience', () => {
+  const sw = existsSync('dist/sw.js') ? readFileSync('dist/sw.js', 'utf8') : ''
+
+  it('doesNotUseAtomicAddAll', () => {
+    // addAll is atomic: one 404 aborts the install, the worker never activates,
+    // and offline dies entirely because a single asset moved.
+    expect(sw).not.toContain('addAll(')
+    expect(sw).toContain('allSettled')
+  })
+})
+
+describe('The composition root', () => {
+  it('actuallyWiresTheReminderScheduler', () => {
+    // Every unit test injects a port directly, so the app shipped without one
+    // and reminders were never scheduled. Guarded here because the wiring, not
+    // the logic, was the thing that was wrong.
+    const app = readFileSync('src/App.tsx', 'utf8')
+    expect(app).toContain('TimerReminderSink')
+    expect(app).toMatch(/reminders:\s*reminderSink/)
+    expect(app).toContain('armAllReminders()')
+  })
+
+  it('registersTheServiceWorker', () => {
+    expect(readFileSync('src/main.tsx', 'utf8')).toContain('registerServiceWorker()')
+  })
+})

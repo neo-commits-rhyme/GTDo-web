@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-test('a reminder fires while the tab is open', async ({ page, context }) => {
-  await context.grantPermissions(['notifications'])
-
-  // Capture notifications without waiting on a real one: the Notification
-  // constructor is replaced before the app boots.
+test('a reminder actually fires while the tab is open', async ({ page }) => {
+  // This test exists because the first version asserted the hint text and not
+  // the notification, and the app shipped without a reminder port wired in at
+  // all — every unit test passed by injecting one directly.
   await page.addInitScript(() => {
     ;(window as unknown as { __fired: string[] }).__fired = []
     class FakeNotification {
@@ -22,15 +21,24 @@ test('a reminder fires while the tab is open', async ({ page, context }) => {
   await page.getByRole('button', { name: 'Add' }).click()
   await page.getByRole('button', { name: 'take the bins out', exact: true }).click()
 
-  // Two seconds out, so the timer is genuinely scheduled and genuinely fires.
-  const at = new Date(Date.now() + 2000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const value = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`
-  await page.getByLabel(/^Reminder/).fill(value)
+  // Seconds out, set through the DOM because the field is minute-resolution.
+  await page.evaluate(() => {
+    const input = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    const at = new Date(Date.now() + 2000)
+    const p = (n: number) => String(n).padStart(2, '0')
+    const value =
+      `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}` +
+      `T${p(at.getHours())}:${p(at.getMinutes())}:${p(at.getSeconds())}`
+    const setter = Object.getOwnPropertyDescriptor(input.constructor.prototype, 'value')!.set!
+    setter.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
 
-  // The field is minute-resolution, so schedule from a value already past the
-  // minute boundary and assert the scheduling path rather than the wall clock.
-  await expect(page.getByText(/open in a tab/)).toBeVisible()
+  await expect
+    .poll(async () => page.evaluate(() => (window as unknown as { __fired: string[] }).__fired), {
+      timeout: 10_000,
+    })
+    .toEqual(['GTDo|take the bins out'])
 })
 
 test('the limit is stated where the reminder is set', async ({ page }) => {

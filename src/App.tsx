@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppStore } from './core/store'
 import { IndexedDbAdapter, requestPersistentStorage } from './storage/indexedDbAdapter'
+import { TimerReminderSink } from './app/reminders/scheduler'
 import { RootShell } from './app/RootShell'
 import { StoreContext } from './app/useStore'
 import { UndoContext } from './app/undo/useUndo'
@@ -9,6 +10,8 @@ import { autoEmptyTrashEnabled } from './app/SettingsSheet'
 import './app/styles.css'
 
 const undoCentre = new UndoCenter()
+/** One sink for the app: reminders are timers in this tab, nothing more. */
+const reminderSink = new TimerReminderSink()
 
 export function App() {
   const [store, setStore] = useState<AppStore | null>(null)
@@ -19,8 +22,14 @@ export function App() {
       adapter: new IndexedDbAdapter(),
       now: () => new Date(),
       scheduler: (ms, fn) => { window.setTimeout(fn, ms) },
+      reminders: reminderSink,
     }).then((created) => {
       if (cancelled) return
+      // Nothing is scheduled by loading, so arm every live reminder once the
+      // store exists. Without this the field stores a date and no timer is
+      // ever set — which is exactly what shipped before an end-to-end test
+      // actually watched for a notification.
+      created.armAllReminders()
       // At launch only, once, and only when the preference is on — matching
       // macOS. There is no timer.
       if (autoEmptyTrashEnabled()) created.purgeTrash(30)
