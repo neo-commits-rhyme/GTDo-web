@@ -16,6 +16,7 @@ import { useTheme } from './theme/useTheme'
 import { useAccent } from './theme/useAccent'
 import { DragProvider } from './dnd/DragProvider'
 import type { DropContext } from './dnd/resolve'
+import { CatchUpBanner } from './reminders/CatchUpBanner'
 import { UndoBar } from './undo/UndoBar'
 import { useUndoCenter } from './undo/useUndo'
 
@@ -77,6 +78,7 @@ export function RootShell() {
     <DragProvider context={dropContext}>
     <div className={`shell shell--${breakpoint}${detailID !== null && breakpoint === 'wide' ? ' shell--detail' : ''}`}>
       <SaveFailureBanner />
+      <CatchUpBanner />
       <LiveRegion />
 
       <header className="shell__bar">

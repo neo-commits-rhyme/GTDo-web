@@ -334,6 +334,19 @@ body {
 
 /* ---------------------------------------------------------------- dialogs */
 
+.catchup {
+  grid-area: bar; display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+  border-bottom: 1px solid var(--rule);
+}
+.catchup__body { flex: 1; }
+.catchup__list { margin: 4px 0 0; padding-left: 18px; color: var(--ink-secondary); }
+.catchup__dismiss {
+  font: inherit; cursor: pointer; padding: 4px 12px; border-radius: 6px;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
+}
+
 .undobar {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
   display: flex; gap: 12px; align-items: center;
