@@ -30,10 +30,20 @@ export function deadlineToken(due: Date | null, today: Date, completed = false):
   }
 }
 
+/**
+ * The year is padded to four digits, which matters more than it looks.
+ *
+ * A date input rejects '2-07-28' outright and sanitises its own value to '',
+ * so a single keystroke in the year segment used to blank the field for good:
+ * every later keystroke re-blanked it, the controlled value never accumulated,
+ * and the step committed a date the user could no longer see. Padding keeps
+ * formatDateInput(parseDateInput(s)) === s across the whole 0001..9999 span
+ * parseDateInput accepts, which is what makes the field survive editing.
+ */
 export function formatDateInput(d: Date | null): string {
   if (d === null) return ''
   const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  return `${String(d.getFullYear()).padStart(4, '0')}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
 /**

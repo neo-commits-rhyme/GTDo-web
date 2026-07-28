@@ -60,21 +60,11 @@ test('missed reminders are surfaced on the next open', async ({ page }) => {
   await page.getByLabel(/^Reminder/).fill(
     `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}T${pad(past.getHours())}:${pad(past.getMinutes())}`,
   )
-  // Backdate the last-seen stamp so the reminder falls after it: the shape of
-  // "it came due while you were away".
-  //
-  // This has to be an init script rather than a plain evaluate(). The stamp is
-  // now written on pagehide too, so a value planted before reload() is
-  // overwritten on the way out and the app boots thinking it saw everything —
-  // which is correct for a reload and wrong for the scenario under test. An
-  // init script lands on the NEW document, after that final write.
-  //
-  // The sessionStorage latch makes it one-shot: the dismissal check below
-  // reloads again, and re-backdating there would resurrect the banner and
-  // assert the opposite of what that step means.
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem('__gtdo_backdated') !== null) return
-    sessionStorage.setItem('__gtdo_backdated', 'used')
+  // Backdate the stamp so the reminder falls after it: the shape of "it came
+  // due while you were away". A plain evaluate() is enough — only a delivered
+  // notification or a dismissal moves the stamp, and neither happens here, so
+  // nothing overwrites this on the way out.
+  await page.evaluate(() => {
     localStorage.setItem('gtdo.lastSeenAt', new Date(Date.now() - 7_200_000).toISOString())
   })
   await page.reload()

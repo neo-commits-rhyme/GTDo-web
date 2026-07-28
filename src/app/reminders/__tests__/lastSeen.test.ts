@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  HEARTBEAT_MS, LAST_SEEN_KEY, markCaughtUp, readLastSeen, resetLastSeenSession,
-  sinceLastOpen, startLastSeenHeartbeat, writeLastSeen,
+  LAST_SEEN_KEY, markCaughtUp, markReported, readLastSeen, resetLastSeenSession,
+  sinceLastOpen, writeLastSeen,
 } from '../lastSeen'
 
 const NOW = new Date(2026, 6, 28, 12, 0, 0)
@@ -25,63 +25,47 @@ describe('The lastSeen stamp', () => {
   })
 })
 
-describe('The last-open heartbeat', () => {
-  afterEach(() => { vi.useRealTimers() })
-
-  it('advancesTheStoredStampAsSoonAsTheAppOpens', () => {
-    // The stamp used to be written only when someone dismissed a catch-up
-    // banner, so it meant "last dismissal", not "last time GTDo was open" —
-    // and a reminder that fired live, on screen, came back next launch as
-    // something missed while the app was closed.
+describe('Only what the user was actually shown advances the stamp', () => {
+  it('advancesWhenAReminderIsDelivered', () => {
+    // The original bug: the stamp moved only on banner dismissal, so a
+    // reminder that fired live, on screen, came back next launch as something
+    // missed while the app was closed.
     localStorage.setItem(LAST_SEEN_KEY, at(9).toISOString())
-    const stop = startLastSeenHeartbeat(() => NOW)
-    expect(readLastSeen()!.getTime()).toBe(NOW.getTime())
-    stop()
+    markReported(at(12))
+    expect(readLastSeen()!.getTime()).toBe(at(12).getTime())
   })
 
-  it('keepsTheOldStampForCatchUpEvenAfterAdvancingTheStoredOne', () => {
+  it('doesNotAdvanceMerelyBecauseTheTabWasAlive', () => {
+    // The regression this replaced: a load/heartbeat/pagehide stamp marked as
+    // seen a reminder that fired with notifications blocked and drew nothing,
+    // so catch-up dropped it for good. Nothing here writes on its own.
     localStorage.setItem(LAST_SEEN_KEY, at(9).toISOString())
-    const stop = startLastSeenHeartbeat(() => NOW)
-    expect(sinceLastOpen()!.getTime()).toBe(at(9).getTime())
-    stop()
+    sinceLastOpen()
+    expect(readLastSeen()!.getTime()).toBe(at(9).getTime())
   })
 
-  it('latchesNullOnAFirstRunRatherThanTheStampItJustWrote', () => {
-    const stop = startLastSeenHeartbeat(() => NOW)
-    expect(sinceLastOpen()).toBeNull()
-    stop()
+  it('neverMovesTheStampBackwards', () => {
+    // A late or out-of-order delivery must not rewind the window and
+    // re-report everything after it.
+    localStorage.setItem(LAST_SEEN_KEY, at(14).toISOString())
+    markReported(at(11))
+    expect(readLastSeen()!.getTime()).toBe(at(14).getTime())
   })
 
-  it('refreshesTheStampWhileTheTabStaysOpen', () => {
-    // pagehide does not run when the browser is killed or the machine dies,
-    // so the window of wrongly-reported reminders is bounded by this instead.
-    vi.useFakeTimers()
-    let clock = NOW.getTime()
-    const stop = startLastSeenHeartbeat(() => new Date(clock))
-    clock += HEARTBEAT_MS
-    vi.advanceTimersByTime(HEARTBEAT_MS)
-    expect(readLastSeen()!.getTime()).toBe(clock)
-    stop()
+  it('advancesFromNothingOnAFirstRun', () => {
+    markReported(at(12))
+    expect(readLastSeen()!.getTime()).toBe(at(12).getTime())
   })
 
-  it('stampsOnTheWayOut', () => {
-    let clock = NOW.getTime()
-    const stop = startLastSeenHeartbeat(() => new Date(clock))
-    clock += 5_000
-    window.dispatchEvent(new Event('pagehide'))
-    expect(readLastSeen()!.getTime()).toBe(clock)
-    stop()
-  })
-
-  it('stopsTouchingTheStampOnceStopped', () => {
-    vi.useFakeTimers()
-    let clock = NOW.getTime()
-    const stop = startLastSeenHeartbeat(() => new Date(clock))
-    stop()
-    clock += HEARTBEAT_MS * 3
-    vi.advanceTimersByTime(HEARTBEAT_MS * 3)
-    window.dispatchEvent(new Event('pagehide'))
-    expect(readLastSeen()!.getTime()).toBe(NOW.getTime())
+  it('doesNotDragThisTabsLatchBackwards', () => {
+    // The latch is what the open banner is rendered from. A delivery older
+    // than it must still catch the stored stamp up without changing what the
+    // user is currently looking at.
+    localStorage.setItem(LAST_SEEN_KEY, at(9).toISOString())
+    sinceLastOpen()
+    markCaughtUp(at(15))
+    markReported(at(12))
+    expect(sinceLastOpen()!.getTime()).toBe(at(15).getTime())
   })
 })
 

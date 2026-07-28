@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppStore } from './core/store'
 import { IndexedDbAdapter, requestPersistentStorage } from './storage/indexedDbAdapter'
 import { TimerReminderSink } from './app/reminders/scheduler'
-import { startLastSeenHeartbeat } from './app/reminders/lastSeen'
+import { markReported } from './app/reminders/lastSeen'
 import { RootShell } from './app/RootShell'
 import { StoreContext } from './app/useStore'
 import { UndoContext } from './app/undo/useUndo'
@@ -11,15 +11,19 @@ import { autoEmptyTrashEnabled } from './app/SettingsSheet'
 import './app/styles.css'
 
 const undoCentre = new UndoCenter()
-/** One sink for the app: reminders are timers in this tab, nothing more. */
-const reminderSink = new TimerReminderSink()
+/**
+ * One sink for the app: reminders are timers in this tab, nothing more.
+ *
+ * onDelivered is what keeps catch-up honest — the stamp advances only for a
+ * notification the browser actually drew, never merely because the timer ran.
+ */
+const reminderSink = new TimerReminderSink({ onDelivered: markReported })
 
 export function App() {
   const [store, setStore] = useState<AppStore | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    let stopHeartbeat: (() => void) | null = null
     void AppStore.create({
       adapter: new IndexedDbAdapter(),
       now: () => new Date(),
@@ -37,12 +41,9 @@ export function App() {
       if (autoEmptyTrashEnabled()) created.purgeTrash(30)
       // Fire-and-forget: Firefox never settles this promise (assumptions §3).
       requestPersistentStorage()
-      // Before the tree renders, so the catch-up banner mounts against the
-      // stamp as it stood at launch rather than the one this call writes.
-      stopHeartbeat = startLastSeenHeartbeat()
       setStore(created)
     })
-    return () => { cancelled = true; stopHeartbeat?.() }
+    return () => { cancelled = true }
   }, [])
 
   if (store === null) return <p className="list__empty">Loading…</p>

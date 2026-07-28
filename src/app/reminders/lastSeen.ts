@@ -1,16 +1,19 @@
 /**
- * When the user last had GTDo open. Bounds the catch-up window so the banner
- * reports what was missed since the last visit rather than everything
- * historical.
+ * How far the user has been TOLD about, which bounds the catch-up window.
+ *
+ * Not "when was GTDo last open". That was tried, via a load/heartbeat/pagehide
+ * stamp, and it is a different question with a different answer: with
+ * notifications blocked a reminder's timer fires and draws nothing, so a tab
+ * merely being alive marked as seen a reminder the user never saw, and the
+ * banner then dropped it for good. Firing is not telling. Only two things
+ * advance this stamp — a notification the browser actually put on screen, and
+ * the user dismissing the catch-up banner.
  *
  * Lives here rather than in core/ because it is browser storage — the purity
  * lint rule caught the first draft putting it in core/catchUp.ts.
  */
 
 export const LAST_SEEN_KEY = 'gtdo.lastSeenAt'
-
-/** How often the stamp is refreshed while the tab is open and visible. */
-export const HEARTBEAT_MS = 30_000
 
 export function readLastSeen(): Date | null {
   try {
@@ -37,8 +40,8 @@ let sessionSince: Date | null | undefined
  * The stamp as it stood when this tab opened.
  *
  * Anything asking "what did the user miss" wants this and never readLastSeen():
- * the heartbeat below keeps moving the stored stamp forward, so by the time the
- * banner renders the stored value already says now and nothing looks missed.
+ * a notification delivered during this session moves the stored stamp forward,
+ * and a banner reading that would erase its own contents mid-session.
  */
 export function sinceLastOpen(): Date | null {
   if (sessionSince === undefined) sessionSince = readLastSeen()
@@ -57,38 +60,22 @@ export function markCaughtUp(at: Date): void {
 }
 
 /**
- * Keeps the stamp meaning what its name says: the last time GTDo was open.
+ * Records that a reminder due at `dueAt` was actually put in front of the user.
  *
- * It used to be written in exactly one place — the catch-up banner's dismiss
- * button — so it really meant "last dismissal". A reminder that fired live,
- * with the app open in front of the user, came back on the next launch as
- * something missed while GTDo was closed, and for anyone who had never
- * dismissed a banner it came back on every launch after that as well.
- *
- * Stamped on start, on a heartbeat while visible, and on the way out, because
- * pagehide never runs for a browser that is killed or a machine that dies.
- *
- * Returns a stop function. Latches sinceLastOpen() before the first write: the
- * catch-up set has to be computed from the old stamp, so advancing it first
- * would suppress the very reminders the banner exists to report.
+ * Only ever moves forward, and forward of BOTH the stored stamp and this tab's
+ * latch: a reminder delivered out of order must not rewind the window and
+ * re-report everything after it.
  */
-export function startLastSeenHeartbeat(now: () => Date = () => new Date()): () => void {
-  sinceLastOpen()
-  const stamp = () => { writeLastSeen(now()) }
-  const onVisibilityChange = () => { if (document.visibilityState === 'hidden') stamp() }
-  stamp()
-
-  const beat = window.setInterval(() => {
-    if (document.visibilityState === 'visible') stamp()
-  }, HEARTBEAT_MS)
-  window.addEventListener('pagehide', stamp)
-  document.addEventListener('visibilitychange', onVisibilityChange)
-
-  return () => {
-    window.clearInterval(beat)
-    window.removeEventListener('pagehide', stamp)
-    document.removeEventListener('visibilitychange', onVisibilityChange)
+export function markReported(dueAt: Date): void {
+  const stored = readLastSeen()
+  if (stored !== null && stored >= dueAt) return
+  if (sessionSince != null && sessionSince >= dueAt) {
+    // The latch is already past this, so only the stored stamp needs catching
+    // up. Writing through markCaughtUp would drag the latch backwards.
+    writeLastSeen(dueAt)
+    return
   }
+  markCaughtUp(dueAt)
 }
 
 /** Test-only: forgets the latched stamp so the next read starts a fresh session. */

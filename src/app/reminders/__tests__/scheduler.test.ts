@@ -12,7 +12,7 @@ function harness() {
     now: () => NOW,
     setTimer: (fn, ms) => { const h = next++; timers.set(h, { fn, ms }); return h },
     clearTimer: (h) => { timers.delete(h) },
-    notify: (title, body) => { notified.push({ title, body }) },
+    notify: (title, body) => { notified.push({ title, body }); return true },
   })
   return {
     sink, notified, timers,
@@ -113,7 +113,7 @@ function chainHarness() {
     now: () => new Date(clock),
     setTimer: (fn, ms) => { legs.push(ms); const h = next++; timers.set(h, { fn, ms }); return h },
     clearTimer: (h) => { timers.delete(h) },
-    notify: (title, body) => { notified.push({ title, body }) },
+    notify: (title, body) => { notified.push({ title, body }); return true },
   })
   return {
     sink, notified, legs, timers,
@@ -170,7 +170,7 @@ describe('Waits longer than a browser timer can hold', () => {
     // Every other test here injects setTimer, so the platform's own truncation
     // of an over-long delay was never exercised — which is how this shipped.
     const notified: string[] = []
-    const sink = new TimerReminderSink({ notify: (_t, body) => { notified.push(body) } })
+    const sink = new TimerReminderSink({ notify: (_t, body) => { notified.push(body); return true } })
     sink.schedule('a', 'renew passport', new Date(Date.now() + 60 * 86_400_000))
     await new Promise((resolve) => { setTimeout(resolve, 20) })
     expect(notified).toEqual([])
@@ -199,5 +199,70 @@ describe('The no-op sink', () => {
       noopReminderSink.cancel('a')
       noopReminderSink.cancelAll()
     }).not.toThrow()
+  })
+})
+
+describe('Delivery is reported, firing is not', () => {
+  /** A wheel whose one timer can be fired by hand. */
+  const wheel = () => {
+    let fn: (() => void) | null = null
+    return {
+      setTimer: (f: () => void) => { fn = f; return 1 },
+      clearTimer: () => { fn = null },
+      fire: () => { const f = fn; fn = null; f?.() },
+    }
+  }
+
+  it('reportsAReminderTheBrowserActuallyDrew', () => {
+    const w = wheel()
+    const delivered: Date[] = []
+    const due = new Date(NOW.getTime() + 60_000)
+    const sink = new TimerReminderSink({
+      now: () => NOW,
+      setTimer: w.setTimer,
+      clearTimer: w.clearTimer,
+      notify: () => true,
+      onDelivered: (at) => delivered.push(at),
+    })
+    sink.schedule('a', 'take the pills', due)
+    w.fire()
+    // The instant it was DUE for, not the instant it happened to fire: the
+    // stamp is a window boundary, and a leg that wakes late must not skip
+    // anything that came due in between.
+    expect(delivered.map((d) => d.getTime())).toEqual([due.getTime()])
+  })
+
+  it('reportsNothingWhenNotificationsAreBlocked', () => {
+    // The regression that made this necessary: catch-up used to advance on a
+    // stamp that only meant "the tab was alive", so a reminder whose timer ran
+    // while notifications were blocked — drawing nothing at all — was marked
+    // as seen and never reported. Firing is not telling.
+    const w = wheel()
+    const delivered: Date[] = []
+    const sink = new TimerReminderSink({
+      now: () => NOW,
+      setTimer: w.setTimer,
+      clearTimer: w.clearTimer,
+      notify: () => false,
+      onDelivered: (at) => delivered.push(at),
+    })
+    sink.schedule('a', 'take the pills', new Date(NOW.getTime() + 60_000))
+    w.fire()
+    expect(delivered).toEqual([])
+  })
+
+  it('reportsNothingWhenTheNotifierThrows', () => {
+    const w = wheel()
+    const delivered: Date[] = []
+    const sink = new TimerReminderSink({
+      now: () => NOW,
+      setTimer: w.setTimer,
+      clearTimer: w.clearTimer,
+      notify: () => { throw new Error('construction refused') },
+      onDelivered: (at) => delivered.push(at),
+    })
+    sink.schedule('a', 'take the pills', new Date(NOW.getTime() + 60_000))
+    expect(() => { w.fire() }).not.toThrow()
+    expect(delivered).toEqual([])
   })
 })

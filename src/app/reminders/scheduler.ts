@@ -49,16 +49,26 @@ export type SchedulerDeps = {
   now: () => Date
   setTimer: (fn: () => void, ms: number) => number
   clearTimer: (handle: number) => void
-  notify: (title: string, body: string) => void
+  /** True only when something was actually put in front of the user. */
+  notify: (title: string, body: string) => boolean
+  /**
+   * A reminder that was genuinely shown, with the instant it was due for.
+   *
+   * Catch-up needs to know what the user has been TOLD, and firing is not
+   * telling: with notifications blocked the timer runs and draws nothing.
+   */
+  onDelivered: (dueAt: Date) => void
 }
 
-function defaultNotify(title: string, body: string): void {
+function defaultNotify(title: string, body: string): boolean {
   try {
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false
     new Notification(title, { body, tag: 'gtdo-reminder' })
+    return true
   } catch {
     // Some browsers throw on construction in some contexts. A missed
     // notification must never surface as an app error.
+    return false
   }
 }
 
@@ -82,6 +92,7 @@ export class TimerReminderSink implements ReminderSink {
       setTimer: deps.setTimer ?? ((fn, ms) => window.setTimeout(fn, ms)),
       clearTimer: deps.clearTimer ?? ((h) => { window.clearTimeout(h) }),
       notify: deps.notify ?? defaultNotify,
+      onDelivered: deps.onDelivered ?? (() => {}),
     }
   }
 
@@ -111,7 +122,7 @@ export class TimerReminderSink implements ReminderSink {
     const handle = this.deps.setTimer(() => {
       this.timers.delete(id)
       try {
-        this.deps.notify('GTDo', title)
+        if (this.deps.notify('GTDo', title)) this.deps.onDelivered(at)
       } catch {
         // A notifier that throws must not escape into whatever the timer
         // interrupted. Missing a notification is a garnish failing; an
