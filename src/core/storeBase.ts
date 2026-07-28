@@ -15,7 +15,7 @@ import { BuiltIn, sameID, seededAppData, type AppData, type CalendarBucket, type
 import * as Q from './queries'
 import type { QueryContext } from './queries'
 import { BACKUP_INTERVAL_MS } from './snapshotPolicy'
-import type { StoragePort } from './ports'
+import type { SnapshotMeta, StoragePort } from './ports'
 import { WriteQueue } from './writeQueue'
 
 export type StoreDeps = {
@@ -148,6 +148,27 @@ export class StoreBase {
     for (const fn of this.subscribers) fn()
   }
 
+  // MARK: - View state
+  //
+  // These are plain fields, but the UI needs a render when they change, so the
+  // setters exist rather than exposing notify().
+
+  setSelection(item: SidebarItem | null): void {
+    this.selection = item
+    this.selectedTaskID = null
+    this.notify()
+  }
+
+  setSelectedTask(id: string | null): void {
+    this.selectedTaskID = id
+    this.notify()
+  }
+
+  setSearchQuery(query: string): void {
+    this.searchQuery = query
+    this.notify()
+  }
+
   // MARK: - Persistence
 
   /**
@@ -177,6 +198,15 @@ export class StoreBase {
     this.pendingEncoded = encoded
     this.queue.enqueue(encoded)
     void this.queue.flush()
+  }
+
+  /** The rotating snapshots available to restore from, newest first. */
+  listSnapshots(): Promise<SnapshotMeta[]> {
+    return this.adapter.listSnapshots()
+  }
+
+  readSnapshot(id: string): Promise<string> {
+    return this.adapter.readSnapshot(id)
   }
 
   /** Awaits the pending write. Tests and the export path use this. */

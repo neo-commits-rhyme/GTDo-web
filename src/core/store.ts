@@ -458,7 +458,12 @@ export class AppStore extends StoreBase {
 
     for (const id of movable) if (this.task(id)?.dueDate != null) this.moveTask(id, target)
     const needing = movable.filter((id) => this.task(id)?.dueDate == null)
-    if (needing.length > 0) this.pendingDeadline = { kind: 'move', taskIDs: needing, target }
+    if (needing.length > 0) {
+      this.pendingDeadline = { kind: 'move', taskIDs: needing, target }
+      // Raising the prompt is not a persisted mutation, so nothing else would
+      // tell the UI to render it.
+      this.notify()
+    }
   }
 
   /**
@@ -475,6 +480,7 @@ export class AppStore extends StoreBase {
       if (trimmed === '') return null
       // The stored title is already trimmed.
       this.pendingDeadline = { kind: 'create', title: trimmed, target: context.id }
+      this.notify()
       return null
     }
 

@@ -1,0 +1,87 @@
+import { useEffect } from 'react'
+import { BuiltIn, type SidebarItem } from '../core/models'
+import { useStore } from './useStore'
+
+/**
+ * Bare keys, not ⌘-chords.
+ *
+ * Measured in docs/assumptions.md §1: a page can see and preventDefault ⌘N/⌘F/⌘,
+ * in all three engines, but whether the browser chrome ALSO acts is not
+ * testable through a driver — and on Windows and Linux Ctrl+N and Ctrl+F are
+ * browser-owned regardless. Bare keys are correct under either outcome.
+ *
+ * The handler checks event.target itself: chords and bare keys both arrive
+ * while a text field is focused, so the browser will not do the suppression
+ * for us.
+ */
+export function useShortcuts(navigate: (item: SidebarItem) => void, openSettings: () => void) {
+  const store = useStore()
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const typing =
+        target !== null &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+
+      if (e.key === 'Escape') {
+        // Detail first, then search — most-recently-opened wins.
+        if (store.selectedTaskID !== null) store.setSelectedTask(null)
+        else if (store.searchQuery !== '') store.setSearchQuery('')
+        else if (typing) (target as HTMLElement).blur()
+        return
+      }
+
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+
+      switch (e.key) {
+        case 'n':
+          e.preventDefault()
+          window.dispatchEvent(new CustomEvent('gtdo:focus-add'))
+          break
+        case '/':
+        case 'f':
+          e.preventDefault()
+          window.dispatchEvent(new CustomEvent('gtdo:focus-search'))
+          break
+        case '1': navigate({ kind: 'smart', view: 'today' }); break
+        case '2': navigate({ kind: 'smart', view: 'calendar' }); break
+        case '3': navigate({ kind: 'list', id: BuiltIn.inbox }); break
+        case ',': openSettings(); break
+        case 'Delete':
+        case 'Backspace': {
+          const id = store.selectedTaskID
+          if (id !== null) {
+            e.preventDefault()
+            store.trashTask(id)
+          }
+          break
+        }
+        case '[':
+        case ']': {
+          // The accessible path sub-project 3's drag will layer over.
+          const id = store.selectedTaskID
+          if (id === null) return
+          const task = store.task(id)
+          if (task === null) return
+          const siblings = store.incompleteTasks(task.listID)
+          const index = siblings.findIndex((t) => t.id === id)
+          if (index < 0) return
+          e.preventDefault()
+          // SwiftUI onMove semantics: down one is index + 2.
+          if (e.key === '[' && index > 0) store.moveIncompleteTasks(task.listID, [index], index - 1)
+          if (e.key === ']' && index < siblings.length - 1) {
+            store.moveIncompleteTasks(task.listID, [index], index + 2)
+          }
+          break
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [store, navigate, openSettings])
+}
