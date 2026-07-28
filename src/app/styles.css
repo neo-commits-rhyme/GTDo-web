@@ -233,6 +233,8 @@ body {
 }
 
 .settings__row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.settings__choices { display: flex; gap: 14px; border: 0; margin: 0; padding: 0; }
+.settings__choice { display: flex; gap: 5px; align-items: center; cursor: pointer; }
 .settings__note { color: var(--ink-secondary); }
 .settings__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .settings__import {

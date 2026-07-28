@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SnapshotMeta } from '../core/ports'
 import { downloadExport, importText, restoreSnapshot } from './transfer'
 import { useStore, useStoreTick } from './useStore'
+import { useTheme, type ThemeChoice } from './theme/useTheme'
 
 export const AUTO_EMPTY_TRASH_KEY = 'gtdo.autoEmptyTrash'
 
@@ -15,6 +16,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const store = useStore()
   const [autoEmpty, setAutoEmpty] = useState(autoEmptyTrashEnabled)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
+  const [theme, setTheme] = useTheme()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { void store.listSnapshots().then(setSnapshots) }, [store])
@@ -36,6 +38,23 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           <h2>Settings</h2>
           <button type="button" onClick={onClose} aria-label="Close settings">✕</button>
         </div>
+
+        <h3>Appearance</h3>
+        <fieldset className="settings__choices">
+          <legend className="visually-hidden">Appearance</legend>
+          {(['system', 'light', 'dark'] as ThemeChoice[]).map((choice) => (
+            <label key={choice} className="settings__choice">
+              <input
+                type="radio"
+                name="theme"
+                value={choice}
+                checked={theme === choice}
+                onChange={() => setTheme(choice)}
+              />
+              <span>{choice === 'system' ? 'System' : choice === 'light' ? 'Light' : 'Dark'}</span>
+            </label>
+          ))}
+        </fieldset>
 
         <label className="settings__row">
           <input
