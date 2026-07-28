@@ -175,6 +175,8 @@ body {
 .rows { list-style: none; margin: 0; padding: 0; }
 
 .row { display: flex; gap: 8px; align-items: center; min-height: 28px; }
+/* Vertical panning still scrolls the list; only horizontal is ours. */
+@media (pointer: coarse) { .row { touch-action: pan-y; } }
 .row + .row { border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
 .row--selected { background: var(--selection); border-radius: 5px; }
 

@@ -5,6 +5,7 @@ import { dragID } from './dnd/resolve'
 import { deadlineToken } from './format'
 import { playCompletionSound } from './sound'
 import { useStore } from './useStore'
+import { useSwipe } from './swipe/useSwipe'
 
 /**
  * One row. The completion circle is a real button with aria-checked, and the
@@ -17,12 +18,17 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
   const token = deadlineToken(task.dueDate, store.today, completed)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: dragID.task(task.id) })
+  const { dx, swipeHandlers } = useSwipe(task)
 
   return (
     <li
       ref={setNodeRef}
       className={`row${selected ? ' row--selected' : ''}${completed ? ' row--done' : ''}${isDragging ? ' row--dragging' : ''}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: dx === 0 ? CSS.Transform.toString(transform) : `translateX(${dx}px)`,
+        transition: dx === 0 ? transition : 'none',
+      }}
+      {...swipeHandlers}
     >
       {/* A dedicated handle rather than a draggable row: the row body opens the
           detail pane and the circle completes, and both must stay clickable. */}

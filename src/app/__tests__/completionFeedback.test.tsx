@@ -6,6 +6,8 @@ import { AppStore } from '../../core/store'
 import { MemoryAdapter } from '../../storage/memoryAdapter'
 import { StoreContext } from '../useStore'
 import { TaskList } from '../TaskList'
+import { UndoContext } from '../undo/useUndo'
+import { UndoCenter } from '../../core/undo'
 import { completionSoundEnabled, setCompletionSoundEnabled, playCompletionSound, SOUND_KEY } from '../sound'
 
 const NOW = new Date(2026, 6, 28, 9, 0, 0)
@@ -38,7 +40,9 @@ async function mount() {
   store.addTask('buy milk', { kind: 'smart', view: 'today' })
   render(
     <StoreContext.Provider value={store}>
-      <TaskList />
+      <UndoContext.Provider value={new UndoCenter(() => {})}>
+        <TaskList />
+      </UndoContext.Provider>
     </StoreContext.Provider>,
   )
   return store
