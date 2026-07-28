@@ -119,3 +119,53 @@ describe('Drop semantics through the store', () => {
     expect(store.incompleteTasks(BuiltIn.notes).map((t) => t.id)).toEqual([a.id, b.id])
   })
 })
+
+describe('The list actually re-renders', () => {
+  it('aReorderChangesTheRenderedOrder', async () => {
+    // A reorder is a permutation, so any fingerprint that sums `order`
+    // unweighted is identical before and after — and the list silently never
+    // re-renders. Found by E2E, guarded here.
+    const { store } = await mount()
+    const a = store.addTask('alpha', { kind: 'list', id: BuiltIn.notes })!
+    store.addTask('beta', { kind: 'list', id: BuiltIn.notes })!
+    store.setSelection({ kind: 'list', id: BuiltIn.notes })
+
+    const rendered = () =>
+      Array.from(document.querySelectorAll('.row__title')).map((e) => e.textContent)
+    expect(await screen.findByText('alpha')).toBeTruthy()
+    expect(rendered()).toEqual(['alpha', 'beta'])
+
+    store.setSelectedTask(a.id)
+    await userEvent.setup().keyboard(']')
+    expect(rendered()).toEqual(['beta', 'alpha'])
+  })
+})
+
+describe('The keyboard paths are as reversible as the drag ones', () => {
+  it('aKeyboardReorderIsUndoable', async () => {
+    const user = userEvent.setup()
+    const { store, undo } = await mount()
+    const a = store.addTask('a', { kind: 'list', id: BuiltIn.notes })!
+    const b = store.addTask('b', { kind: 'list', id: BuiltIn.notes })!
+    store.setSelection({ kind: 'list', id: BuiltIn.notes })
+    store.setSelectedTask(a.id)
+
+    await user.keyboard(']')
+    expect(store.incompleteTasks(BuiltIn.notes).map((t) => t.id)).toEqual([b.id, a.id])
+    expect(undo.pending).not.toBeNull()
+    undo.undo(store)
+    expect(store.incompleteTasks(BuiltIn.notes).map((t) => t.id)).toEqual([a.id, b.id])
+  })
+
+  it('aKeyboardTrashIsUndoable', async () => {
+    const user = userEvent.setup()
+    const { store, undo } = await mount()
+    const t = store.addTask('doomed', { kind: 'list', id: BuiltIn.notes })!
+    store.setSelectedTask(t.id)
+
+    await user.keyboard('{Delete}')
+    expect(store.task(t.id)!.isTrashed).toBe(true)
+    undo.undo(store)
+    expect(store.task(t.id)!.isTrashed).toBe(false)
+  })
+})

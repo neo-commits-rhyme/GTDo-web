@@ -77,18 +77,35 @@ customised here opens there looking the same.
 Completing a task plays a short synthesised tone, which you can turn off.
 `prefers-reduced-motion` removes every spring and scale transform.
 
+## Drag, swipe and undo
+
+Drag a task by its handle to reorder it, or onto a list in the sidebar to file
+it there — dropping onto *Next actions* or *Waiting for…* asks for a deadline
+first. Sidebar entries reorder the same way.
+
+**Everything reachable by drag is reachable by keyboard.** `[` and `]` move the
+selected task, and the sidebar's ↑/↓ buttons reorder lists. Drag is an
+accelerator over those, never a replacement.
+
+On touch, swipe right to complete and left to trash. Neither is offered in
+Completed or Trash: the only commits there are un-complete, already one tap,
+and permanent deletion — and a reflex must never do something unrecoverable.
+
+Anything reversible offers an undo for eight seconds, and `⌘Z` / `Ctrl+Z` works
+for that whole window so you never have to catch a disappearing button.
+
 ## Not here yet
 
-Sub-projects 1 and 2 of five. Still to come: drag-and-drop and swipe actions
-(3), Inbox Review (4), and reminders plus offline install (5). Reminders will
-always be weaker than the macOS app's — a web page cannot wake itself up
-without a push server, and this one deliberately has no server.
+Sub-projects 1–3 of five. Still to come: Inbox Review (4), and reminders plus
+offline install (5). Reminders will always be weaker than the macOS app's — a
+web page cannot wake itself up without a push server, and this one deliberately
+has no server.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 372 unit tests
+npm test          # 432 unit tests
 npm run dev
 npm run build
 ```

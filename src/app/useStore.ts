@@ -69,9 +69,13 @@ function fingerprintOf(store: AppStore): string {
     store.saveError?.message ?? '',
     store.pendingDeadline === null ? '' : store.pendingDeadline.kind,
     store.recentlyCompleted.size,
-    // Field edits do not change any length, so fold the mutable fields in.
-    t.reduce((acc, x) => acc + x.title.length + x.note.length + x.order + (x.isCompleted ? 1 : 0) +
-      (x.isTrashed ? 2 : 0) + (x.dueDate?.getTime() ?? 0) + (x.reminderDate?.getTime() ?? 0) +
+    // Field edits change no length, so fold the mutable fields in — weighted by
+    // position, because a reorder is a permutation and an unweighted sum of
+    // `order` is identical before and after it. That cost a silent
+    // never-re-renders bug.
+    t.reduce((acc, x, i) => acc + (i + 1) * (x.order + 1) + x.title.length + x.note.length +
+      (x.isCompleted ? 1 : 0) + (x.isTrashed ? 2 : 0) +
+      (x.dueDate?.getTime() ?? 0) + (x.reminderDate?.getTime() ?? 0) +
       (x.repeatRule === null ? 0 : x.repeatRule.interval + x.repeatRule.unit.length), 0),
     store.data.lists.reduce((acc, l) => acc + l.name.length + l.order + (l.colorHex?.length ?? 0) + (l.symbol?.length ?? 0), 0),
   ].join('|')

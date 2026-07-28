@@ -4,6 +4,8 @@ import {
   formatDateInput, formatDateTimeInput, parseDateInput, parseDateTimeInput,
 } from './format'
 import { useStore, useStoreTick } from './useStore'
+import { useUndoCenter } from './undo/useUndo'
+import { undoLabel } from '../core/undo'
 
 const REPEAT_OPTIONS: { label: string; rule: RepeatRule | null }[] = [
   { label: 'Never', rule: null },
@@ -21,6 +23,7 @@ const REPEAT_OPTIONS: { label: string; rule: RepeatRule | null }[] = [
 export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () => void }) {
   useStoreTick()
   const store = useStore()
+  const undo = useUndoCenter()
   const task = store.task(taskID)
   const heading = useRef<HTMLHeadingElement>(null)
 
@@ -31,7 +34,12 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
   const move = (listID: string) => {
     // requestMove, not moveTask: a deadline-required target must raise the
     // prompt rather than silently accepting an undated task.
-    store.requestMove([task.id], listID)
+    //
+    // Undoable, because moving into Someday strips the deadline and the repeat
+    // rule — the exact case snapshots exist for.
+    undo.perform(undoLabel('moved', 1), [task.id], store, () => {
+      store.requestMove([task.id], listID)
+    })
   }
 
   return (
@@ -106,7 +114,14 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
         </button>
         {task.isTrashed ? (
           <>
-            <button type="button" onClick={() => store.restoreTask(task.id)}>Restore</button>
+            <button
+              type="button"
+              onClick={() => {
+                undo.perform(undoLabel('restored', 1), [task.id], store, () => store.restoreTask(task.id))
+              }}
+            >
+              Restore
+            </button>
             <button
               type="button"
               className="detail__destructive"
@@ -119,7 +134,10 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
           <button
             type="button"
             className="detail__destructive"
-            onClick={() => { store.trashTask(task.id); onClose() }}
+            onClick={() => {
+              undo.perform(undoLabel('trashed', 1), [task.id], store, () => store.trashTask(task.id))
+              onClose()
+            }}
           >
             Move to trash
           </button>

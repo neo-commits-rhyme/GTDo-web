@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { BuiltIn, type SidebarItem } from '../core/models'
 import { useStore } from './useStore'
-import type { UndoCenter } from '../core/undo'
+import { undoLabel, type UndoCenter } from '../core/undo'
 
 /**
  * Bare keys, not ⌘-chords.
@@ -73,7 +73,7 @@ export function useShortcuts(
           const id = store.selectedTaskID
           if (id !== null) {
             e.preventDefault()
-            store.trashTask(id)
+            undo.perform(undoLabel('trashed', 1), [id], store, () => store.trashTask(id))
           }
           break
         }
@@ -88,11 +88,17 @@ export function useShortcuts(
           const index = siblings.findIndex((t) => t.id === id)
           if (index < 0) return
           e.preventDefault()
-          // SwiftUI onMove semantics: down one is index + 2.
-          if (e.key === '[' && index > 0) store.moveIncompleteTasks(task.listID, [index], index - 1)
-          if (e.key === ']' && index < siblings.length - 1) {
-            store.moveIncompleteTasks(task.listID, [index], index + 2)
+          // The same action by drag is undoable, so this must be too — one
+          // gesture being reversible and its keyboard twin not is worse than
+          // neither being.
+          const moved = (to: number) => {
+            undo.perform(undoLabel('moved', 1), siblings.map((t) => t.id), store, () => {
+              store.moveIncompleteTasks(task.listID, [index], to)
+            })
           }
+          // SwiftUI onMove semantics: down one is index + 2.
+          if (e.key === '[' && index > 0) moved(index - 1)
+          if (e.key === ']' && index < siblings.length - 1) moved(index + 2)
           break
         }
       }
