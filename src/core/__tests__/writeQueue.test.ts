@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { WriteQueue } from '../writeQueue'
-import { MemoryAdapter } from '../memoryAdapter'
-import { FailingAdapter } from '../failingAdapter'
+import { MemoryAdapter } from '../../storage/memoryAdapter'
+import { FailingAdapter } from '../../storage/failingAdapter'
 
 describe('WriteQueue', () => {
   it('coalescesABurstIntoOneWrite', async () => {

@@ -1,6 +1,6 @@
 /** Port of the rotation rules in Persistence.swift:9-18 and keepSet(from:). */
 
-import type { SnapshotMeta } from './types'
+import type { SnapshotMeta } from './ports'
 
 /** How many recent rotating snapshots to keep. */
 export const BACKUPS_KEPT = 20

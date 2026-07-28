@@ -1,4 +1,4 @@
-import type { StorageAdapter } from './types'
+import type { StoragePort } from './ports'
 
 /**
  * Coalesces a burst of mutations into one write.
@@ -18,7 +18,7 @@ export class WriteQueue {
   onError: (e: Error) => void = () => {}
   onSuccess: () => void = () => {}
 
-  constructor(private readonly adapter: StorageAdapter) {}
+  constructor(private readonly adapter: StoragePort) {}
 
   enqueue(raw: string): void {
     this.pending = raw

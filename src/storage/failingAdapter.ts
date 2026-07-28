@@ -1,11 +1,11 @@
-import type { LoadResult, SnapshotMeta, StorageAdapter } from './types'
+import type { LoadResult, SnapshotMeta, StoragePort } from '../core/ports'
 
 /**
  * Every operation fails, the way a browser out of quota or with an evicted
  * origin behaves. Drives the paths that are hardest to reach by accident and
  * most damaging when wrong.
  */
-export class FailingAdapter implements StorageAdapter {
+export class FailingAdapter implements StoragePort {
   constructor(private readonly errorName = 'QuotaExceededError') {}
 
   private error(): Error {

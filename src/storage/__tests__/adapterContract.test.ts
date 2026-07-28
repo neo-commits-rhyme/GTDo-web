@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { MemoryAdapter } from '../memoryAdapter'
 import { FailingAdapter } from '../failingAdapter'
-import type { StorageAdapter } from '../types'
+import type { StoragePort } from '../../core/ports'
 
 /**
  * One suite, run against every adapter. Task 14 imports this and runs it
  * against IndexedDbAdapter, so a behavioural difference between the adapter
  * the tests use and the adapter the app uses cannot hide.
  */
-export function adapterContract(name: string, make: () => StorageAdapter) {
+export function adapterContract(name: string, make: () => StoragePort) {
   describe(`${name} contract`, () => {
-    let a: StorageAdapter
+    let a: StoragePort
     beforeEach(() => {
       a = make()
     })

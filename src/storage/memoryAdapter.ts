@@ -1,11 +1,11 @@
-import { keepSet, snapshotStamp } from './snapshotPolicy'
-import type { LoadResult, SnapshotMeta, StorageAdapter } from './types'
+import { keepSet, snapshotStamp } from '../core/snapshotPolicy'
+import type { LoadResult, SnapshotMeta, StoragePort } from '../core/ports'
 
 /**
  * In-memory adapter for tests. Shares the snapshot rotation logic with the
  * IndexedDB one, so the contract suite exercises the real policy.
  */
-export class MemoryAdapter implements StorageAdapter {
+export class MemoryAdapter implements StoragePort {
   private record: string | null = null
   private snapshots = new Map<string, string>()
   private quarantined: { raw: string; reason: string }[] = []

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { snapshotStamp, keepSet, BACKUPS_KEPT, DAILY_BACKUPS_KEPT, BACKUP_INTERVAL_MS } from '../snapshotPolicy'
-import type { SnapshotMeta } from '../types'
+import type { SnapshotMeta } from '../ports'
 
 const meta = (id: string): SnapshotMeta => ({ id, at: new Date(0), bytes: 1 })
 /** Newest first, matching Persistence.backups(in:) which sorts stamps as text. */

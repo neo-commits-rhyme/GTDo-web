@@ -37,8 +37,13 @@ export default tseslint.config(
     },
   },
   {
-    // Tests construct fixed dates deliberately and assert against a frozen clock.
+    // Tests construct fixed dates deliberately, and core/ tests legitimately
+    // wire up concrete adapters to drive the store.
     files: ['src/**/__tests__/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-syntax': 'off', 'no-restricted-globals': 'off' },
+    rules: {
+      'no-restricted-syntax': 'off',
+      'no-restricted-globals': 'off',
+      'no-restricted-imports': 'off',
+    },
   },
 )
