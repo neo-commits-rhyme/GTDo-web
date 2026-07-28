@@ -18,7 +18,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx eslint .
       - run: npx vitest run
-      - run: npx vite build
+      - run: npm run build
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: End-to-end smoke

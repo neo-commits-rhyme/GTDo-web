@@ -106,17 +106,31 @@ the progress readout stays honest. Delete, File and *Make it a project* have no
 shortcut: a reflex should not reach an unconfirmed delete, and the two pickers
 need a decision no keystroke can express. Every action is undoable.
 
-## Not here yet
+## Reminders, and what they can't do
 
-Sub-projects 1–4 of five. Still to come: reminders plus offline install (5).
-Reminders will always be weaker than the macOS app's — a web page cannot wake
-itself up without a push server, and this one deliberately has no server.
+Set a reminder in the detail pane and it fires **while GTDo is open in a tab**.
+
+It cannot fire while GTDo is closed. Doing that needs a push server holding
+delivery keys, and this app deliberately has none — which is the same decision
+that makes it free to host and keeps your tasks off anyone else's machine.
+
+So the closed case is handled honestly instead: anything that came due while you
+were away is listed in a banner the next time you open the app. Late, but not
+lost. That part needs no permission, so it works even if you deny notifications.
+
+## Install it
+
+GTDo is a progressive web app. Your browser will offer to install it — in
+Chrome, the install icon in the address bar; on iOS, Share → Add to Home Screen.
+
+Installed or not, **it works with no network at all.** Nothing is fetched from a
+server while you use it, so there is nothing to lose when the connection goes.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 471 unit tests
+npm test          # 535 unit tests
 npm run dev
 npm run build
 ```

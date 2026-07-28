@@ -15,9 +15,11 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: 'npm run dev -- --port 5173 --strictPort',
+    // Preview, not dev: the service worker only exists after a build, and the
+    // offline test is meaningless without it.
+    command: 'npm run build && npx vite preview --port 5173 --strictPort',
     url: BASE,
-    reuseExistingServer: true,
-    timeout: 60_000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
   },
 })
