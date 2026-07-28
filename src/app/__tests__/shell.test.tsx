@@ -93,6 +93,13 @@ describe('Deadline token', () => {
     expect(deadlineToken(new Date(2026, 6, 29), NOW)).toEqual({ text: 'Tomorrow', overdue: false })
     expect(deadlineToken(null, NOW)).toBeNull()
   })
+
+  it('aCompletedTaskIsNeverLate', () => {
+    // However long ago it was due — "40d late" on a struck-through row reads
+    // as an unresolved problem.
+    expect(deadlineToken(new Date(2026, 5, 18), NOW, true)).toEqual({ text: 'Jun 18', overdue: false })
+    expect(deadlineToken(new Date(2026, 5, 18), NOW, false)).toEqual({ text: '40d late', overdue: true })
+  })
 })
 
 describe('Shell', () => {

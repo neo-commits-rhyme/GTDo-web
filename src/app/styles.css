@@ -37,6 +37,14 @@ body { margin: 0; font: 15px/1.4 ui-sans-serif, system-ui, sans-serif; }
 .banner__text { flex: 1; }
 
 .nav__group { list-style: none; margin: 0 0 12px; padding: 0; }
+/* The row and its reorder controls sit on one line; the controls only appear
+   on hover or keyboard focus so the sidebar reads as names, not chrome. */
+.nav__group > li { display: flex; flex-wrap: wrap; align-items: center; }
+.nav__group > li > .nav__item { flex: 1; min-width: 0; }
+.nav__reorder { display: flex; opacity: 0; transition: opacity .12s ease; }
+.nav__group > li:hover .nav__reorder,
+.nav__reorder:focus-within { opacity: 1; }
+.nav__nested { flex-basis: 100%; }
 .nav__nested { list-style: none; margin: 0 0 0 12px; padding: 0; }
 .nav__heading { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
   opacity: .6; margin: 12px 4px 4px; }
@@ -46,7 +54,7 @@ body { margin: 0; font: 15px/1.4 ui-sans-serif, system-ui, sans-serif; }
 .nav__label { flex: 1; }
 .nav__label--group { font-weight: 600; padding: 6px 8px; display: inline-block; }
 .nav__count { opacity: .55; font-variant-numeric: tabular-nums; }
-.nav__reorder button { background: none; border: 0; cursor: pointer; opacity: .5; padding: 2px 4px; }
+.nav__reorder button { background: none; border: 0; cursor: pointer; opacity: .6; padding: 2px 4px; line-height: 1; }
 .nav__reorder button:disabled { opacity: .15; cursor: default; }
 .nav__empty { opacity: .5; padding: 6px 8px; }
 .nav__new { margin-top: 8px; background: none; border: 1px dashed var(--line); border-radius: 6px;

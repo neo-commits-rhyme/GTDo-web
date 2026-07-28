@@ -10,13 +10,17 @@ export type DeadlineToken = { text: string; overdue: boolean } | null
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-export function deadlineToken(due: Date | null, today: Date): DeadlineToken {
+export function deadlineToken(due: Date | null, today: Date, completed = false): DeadlineToken {
   if (due === null) return null
   const day = startOfDay(due).getTime()
   const base = startOfDay(today).getTime()
   const days = Math.round((day - base) / 86_400_000)
 
-  if (days < 0) return { text: `${-days}d late`, overdue: true }
+  // A finished task is not late, however long ago it was due. Showing "40d
+  // late" against a struck-through row reads as an unresolved problem.
+  if (days < 0) return completed
+    ? { text: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), overdue: false }
+    : { text: `${-days}d late`, overdue: true }
   if (days === 0) return { text: 'Today', overdue: false }
   if (days === 1) return { text: 'Tomorrow', overdue: false }
   if (days < 7) return { text: WEEKDAYS[startOfDay(due).getDay()]!, overdue: false }

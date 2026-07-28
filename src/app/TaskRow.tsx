@@ -10,7 +10,7 @@ import { useStore } from './useStore'
 export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean }) {
   const store = useStore()
   const completed = store.rendersCompleted(task)
-  const token = deadlineToken(task.dueDate, store.today)
+  const token = deadlineToken(task.dueDate, store.today, completed)
 
   return (
     <li className={`row${selected ? ' row--selected' : ''}`}>
