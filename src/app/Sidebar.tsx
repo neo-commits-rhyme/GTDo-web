@@ -1,4 +1,4 @@
-import { SMART_VIEWS, sidebarItemsEqual, type SidebarItem, type SmartView } from '../core/models'
+import { BuiltIn, SMART_VIEWS, sameID, sidebarItemsEqual, type SidebarItem, type SmartView } from '../core/models'
 import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { dragID } from './dnd/resolve'
@@ -61,7 +61,15 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
     )
   }
 
-  const gtdEntries = store.gtdSectionItems()
+  const allGTD = store.gtdSectionItems()
+  // Projects gets its own section rather than sitting among the GTD lists.
+  // It stays in gtdOrder so the macOS sidebar order is untouched — this is a
+  // rendering split, not a data one — which is why the reorder buttons map
+  // back to the position in the full order rather than the filtered one.
+  const gtdEntries = allGTD.filter((e) => !(e.kind === 'group' && sameID(e.group.id, BuiltIn.projectsGroup)))
+  const projectsGroup = allGTD.find((e) => e.kind === 'group' && sameID(e.group.id, BuiltIn.projectsGroup))
+  const orderIndexOf = (id: string) =>
+    allGTD.findIndex((e) => sameID(e.kind === 'list' ? e.list.id : e.group.id, id))
   const userEntries = store.userSectionItems()
 
   return (
@@ -73,7 +81,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
       <h2 className="nav__heading">GTD</h2>
       <ul className="nav__group">
         {listLink(store.data.lists[0]!.id)}
-        {gtdEntries.map((entry, i) =>
+        {gtdEntries.map((entry) =>
           entry.kind === 'list' ? (
             <li key={entry.list.id}>
               <ListRow
@@ -85,27 +93,28 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
               />
               <ReorderButtons
                 label={entry.list.name}
-                index={i}
-                count={gtdEntries.length}
+                index={orderIndexOf(entry.list.id)}
+                count={allGTD.length}
                 onMove={(from, to) => store.moveGTDEntries([from], to)}
               />
             </li>
-          ) : (
-            <li key={entry.group.id} className="nav__group-row">
-              <span className="nav__label nav__label--group">{entry.group.name}</span>
-              <ReorderButtons
-                label={entry.group.name}
-                index={i}
-                count={gtdEntries.length}
-                onMove={(from, to) => store.moveGTDEntries([from], to)}
-              />
-              <ul className="nav__nested">
-                {store.listsInGroup(entry.group.id).map((l) => listLink(l.id))}
-              </ul>
-            </li>
-          ),
+          ) : null,
         )}
       </ul>
+
+      {projectsGroup !== undefined && projectsGroup.kind === 'group' && (
+        <>
+          <h2 className="nav__heading">Projects</h2>
+          <ul className="nav__group">
+            {store.listsInGroup(projectsGroup.group.id).map((l) => listLink(l.id))}
+            {store.listsInGroup(projectsGroup.group.id).length === 0 && (
+              <li className="nav__empty">
+                No projects yet. Turn a task into one from its detail pane.
+              </li>
+            )}
+          </ul>
+        </>
+      )}
 
       <h2 className="nav__heading">My lists</h2>
       <ul className="nav__group">
