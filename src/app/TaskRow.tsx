@@ -1,5 +1,6 @@
 import type { TaskItem } from '../core/models'
 import { deadlineToken } from './format'
+import { playCompletionSound } from './sound'
 import { useStore } from './useStore'
 
 /**
@@ -20,7 +21,12 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
         role="checkbox"
         aria-checked={completed}
         aria-label={`${completed ? 'Un-complete' : 'Complete'} ${task.title}`}
-        onClick={() => store.toggleCompletedHolding(task.id)}
+        onClick={() => {
+          // Sound only on the way to complete, never on un-complete —
+          // matching the macOS behaviour.
+          if (!completed) playCompletionSound()
+          store.toggleCompletedHolding(task.id)
+        }}
       >
         <span aria-hidden="true">{completed ? '●' : '○'}</span>
       </button>

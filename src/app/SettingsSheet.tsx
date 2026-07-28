@@ -6,6 +6,7 @@ import { useTheme, type ThemeChoice } from './theme/useTheme'
 import { useAccent } from './theme/useAccent'
 import { ACCENTS } from './theme/accents'
 import { readableInkOn } from './theme/contrast'
+import { completionSoundEnabled, setCompletionSoundEnabled } from './sound'
 
 export const AUTO_EMPTY_TRASH_KEY = 'gtdo.autoEmptyTrash'
 
@@ -21,6 +22,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [theme, setTheme] = useTheme()
   const [accent, setAccent] = useAccent()
+  const [sound, setSound] = useState(completionSoundEnabled)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { void store.listSnapshots().then(setSnapshots) }, [store])
@@ -79,6 +81,15 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             )
           })}
         </div>
+
+        <label className="settings__row">
+          <input
+            type="checkbox"
+            checked={sound}
+            onChange={(e) => { setSound(e.target.checked); setCompletionSoundEnabled(e.target.checked) }}
+          />
+          <span>Completion sound</span>
+        </label>
 
         <label className="settings__row">
           <input
