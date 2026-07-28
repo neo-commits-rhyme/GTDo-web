@@ -100,8 +100,19 @@ describe('IndexedDbAdapter across tabs', () => {
     return decodeAppData(result.raw).tasks.map((t) => t.title).sort()
   }
 
-  /** BroadcastChannel delivery is a task, not a microtask. */
-  const deliverBroadcasts = () => new Promise<void>((r) => { setTimeout(r, 0) })
+  /**
+   * BroadcastChannel delivery is a task, not a microtask — and HOW MANY turns
+   * of the loop it takes is not ours to decide. A single setTimeout(0) was
+   * enough on this machine and not on CI, which is the exact shape of a test
+   * that fails a deploy for no reason. Wait for the effect, never for a delay.
+   */
+  const until = async (what: string, ready: () => boolean, timeoutMs = 2000) => {
+    const deadline = Date.now() + timeoutMs
+    while (!ready()) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
+      await new Promise((r) => { setTimeout(r, 5) })
+    }
+  }
 
   it('refusesAStaleWriteInsteadOfDeletingTheOtherTabsWork', async () => {
     // No channel: the compare-and-swap is the only thing standing between the
@@ -135,7 +146,7 @@ describe('IndexedDbAdapter across tabs', () => {
 
     tab1.addTask('written by tab one', TODAY)
     await tab1.flushWrites()
-    await deliverBroadcasts()
+    await until('tab 2 to adopt what tab 1 wrote', () => tab2.data.tasks.length === 1)
     expect(tab2.data.tasks.map((t) => t.title)).toEqual(['written by tab one'])
 
     tab2.addTask('written by tab two', TODAY)
