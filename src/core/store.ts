@@ -520,6 +520,29 @@ export class AppStore extends StoreBase {
     this.notify()
   }
 
+  // MARK: - Inbox Review
+
+  /**
+   * Incomplete, non-trashed Inbox tasks — oldest first, since incompleteTasks
+   * is already order-sorted.
+   */
+  inboxReviewQueue(): TaskItem[] {
+    return this.incompleteTasks(BuiltIn.inbox)
+  }
+
+  /** "Do it": give the task a deadline and move it to Next actions, which
+   *  preserves the deadline — only Someday strips it. */
+  reviewDoIt(id: string, deadline: Date): void {
+    this.setDueDate(id, deadline)
+    this.moveTask(id, BuiltIn.nextActions)
+  }
+
+  /** "Delegate it": give the task a deadline and move it to Waiting for. */
+  reviewDelegate(id: string, deadline: Date): void {
+    this.setDueDate(id, deadline)
+    this.moveTask(id, BuiltIn.waitingFor)
+  }
+
   // MARK: - Sidebar queries
 
   userGroups(): ListGroup[] {

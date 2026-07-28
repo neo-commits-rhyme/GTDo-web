@@ -3,6 +3,9 @@ import { CALENDAR_BUCKETS, type SidebarItem, type TaskItem } from '../core/model
 import { dragID } from './dnd/resolve'
 import { AddBar } from './AddBar'
 import { TaskRow } from './TaskRow'
+import { useState } from 'react'
+import { BuiltIn, sameID } from '../core/models'
+import { ReviewSheet } from './review/ReviewSheet'
 import { useStore, useStoreTick } from './useStore'
 
 type Section = { title: string | null; tasks: TaskItem[] }
@@ -55,6 +58,12 @@ function sectionsFor(store: ReturnType<typeof useStore>, selection: SidebarItem 
 export function TaskList() {
   useStoreTick()
   const store = useStore()
+  const [reviewing, setReviewing] = useState(false)
+
+  const isInbox =
+    store.selection !== null && store.selection.kind === 'list' &&
+    sameID(store.selection.id, BuiltIn.inbox)
+  const reviewable = store.inboxReviewQueue().length
 
   const query = store.searchQuery.trim()
   if (query !== '') {
@@ -73,7 +82,20 @@ export function TaskList() {
 
   return (
     <div className="list">
-      <h1 className="list__title">{title}</h1>
+      <div className="list__head">
+        <h1 className="list__title">{title}</h1>
+        {isInbox && (
+          <button
+            type="button"
+            className="list__review"
+            disabled={reviewable === 0}
+            onClick={() => setReviewing(true)}
+          >
+            Review{reviewable > 0 ? ` (${reviewable})` : ''}
+          </button>
+        )}
+      </div>
+      {reviewing && <ReviewSheet onClose={() => setReviewing(false)} />}
       {populated.length === 0 && <p className="list__empty">Nothing here yet.</p>}
       {populated.map((section, i) => (
         <section key={section.title ?? `main-${i}`} className="list__section">

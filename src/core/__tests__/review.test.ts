@@ -167,3 +167,51 @@ describe('The frozen queue', () => {
     expect(first.current).toBe('a') // untouched
   })
 })
+
+describe('The store half', () => {
+  it('reviewDoItDatesThenMovesToNextActions', async () => {
+    const { AppStore } = await import('../store')
+    const { MemoryAdapter } = await import('../../storage/memoryAdapter')
+    const { BuiltIn } = await import('../models')
+    const now = new Date(2026, 6, 28, 9, 0, 0)
+    const s = await AppStore.create({
+      adapter: new MemoryAdapter(), now: () => now, scheduler: (_m, f) => f(),
+    })
+    const t = s.addTask('thing', { kind: 'list', id: BuiltIn.inbox })!
+    s.reviewDoIt(t.id, new Date(2026, 7, 5))
+    expect(s.task(t.id)!.listID).toBe(BuiltIn.nextActions)
+    // Next actions preserves the deadline — only Someday strips it.
+    expect(s.task(t.id)!.dueDate!.getDate()).toBe(5)
+  })
+
+  it('reviewDelegateDatesThenMovesToWaitingFor', async () => {
+    const { AppStore } = await import('../store')
+    const { MemoryAdapter } = await import('../../storage/memoryAdapter')
+    const { BuiltIn } = await import('../models')
+    const now = new Date(2026, 6, 28, 9, 0, 0)
+    const s = await AppStore.create({
+      adapter: new MemoryAdapter(), now: () => now, scheduler: (_m, f) => f(),
+    })
+    const t = s.addTask('thing', { kind: 'list', id: BuiltIn.inbox })!
+    s.reviewDelegate(t.id, new Date(2026, 7, 9))
+    expect(s.task(t.id)!.listID).toBe(BuiltIn.waitingFor)
+    expect(s.task(t.id)!.dueDate!.getDate()).toBe(9)
+  })
+
+  it('theQueueIsInboxOnlyAndExcludesCompletedAndTrashed', async () => {
+    const { AppStore } = await import('../store')
+    const { MemoryAdapter } = await import('../../storage/memoryAdapter')
+    const { BuiltIn } = await import('../models')
+    const now = new Date(2026, 6, 28, 9, 0, 0)
+    const s = await AppStore.create({
+      adapter: new MemoryAdapter(), now: () => now, scheduler: (_m, f) => f(),
+    })
+    const open = s.addTask('open', { kind: 'list', id: BuiltIn.inbox })!
+    const done = s.addTask('done', { kind: 'list', id: BuiltIn.inbox })!
+    const gone = s.addTask('gone', { kind: 'list', id: BuiltIn.inbox })!
+    s.addTask('elsewhere', { kind: 'list', id: BuiltIn.notes })
+    s.toggleCompleted(done.id)
+    s.trashTask(gone.id)
+    expect(s.inboxReviewQueue().map((t) => t.id)).toEqual([open.id])
+  })
+})
