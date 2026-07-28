@@ -13,6 +13,8 @@ import {
   type ListGroup, type SidebarItem, type TaskItem, type TaskList, type RepeatRule,
 } from './models'
 import { nextOccurrence } from './recurrence'
+import { searchResults, type SearchOptions } from './search'
+import { entryFor, GTD_BLOCK_IDS, healOrder, moveWithinArray, type SidebarEntry } from './reorder'
 import { makeSampleData } from './seed'
 
 export { COMPLETION_HOLD_WINDOW_MS } from './storeBase'
@@ -519,6 +521,58 @@ export class AppStore extends StoreBase {
     return this.data.lists
       .filter((l) => l.groupID === null && !l.isBuiltIn)
       .sort((a, b) => a.order - b.order)
+  }
+
+  // MARK: - Search
+
+  /** Reads isCompleted/isTrashed directly — never through the completion hold. */
+  searchResults(opts: SearchOptions = {}): TaskItem[] {
+    return searchResults(this.data, this.searchQuery, opts)
+  }
+
+  // MARK: - Sidebar order
+
+  /** Healed on read; the stored value is only rewritten by an explicit move. */
+  healedGTDOrder(): string[] {
+    return healOrder(this.data.gtdOrder, GTD_BLOCK_IDS)
+  }
+
+  healedUserOrder(): string[] {
+    const canonical = [...this.userGroups().map((g) => g.id), ...this.ungroupedUserLists().map((l) => l.id)]
+    return healOrder(this.data.userOrder, canonical)
+  }
+
+  gtdSectionItems(): SidebarEntry[] {
+    return this.healedGTDOrder()
+      .map((id) => entryFor(id, this.data.lists, this.data.groups))
+      .filter((e): e is SidebarEntry => e !== null)
+  }
+
+  userSectionItems(): SidebarEntry[] {
+    return this.healedUserOrder()
+      .map((id) => entryFor(id, this.data.lists, this.data.groups))
+      .filter((e): e is SidebarEntry => e !== null)
+  }
+
+  moveGTDEntries(from: number[], destination: number): void {
+    this.data.gtdOrder = moveWithinArray(this.healedGTDOrder(), from, destination)
+    this.persist()
+  }
+
+  moveUserEntries(from: number[], destination: number): void {
+    this.data.userOrder = moveWithinArray(this.healedUserOrder(), from, destination)
+    this.persist()
+  }
+
+  /** Renumbers a group's lists 0..n. Orders therefore tie across groups —
+   *  safe only because every read sorts within a single group scope. */
+  moveListsInGroup(groupID: string | null, from: number[], destination: number): void {
+    const members = moveWithinArray(this.listsInGroup(groupID), from, destination)
+    members.forEach((member, idx) => {
+      const i = this.data.lists.findIndex((l) => sameID(l.id, member.id))
+      if (i >= 0) this.data.lists[i]!.order = idx
+    })
+    this.persist()
   }
 
   // MARK: - Reminders (scheduling itself lands in sub-project 5)
