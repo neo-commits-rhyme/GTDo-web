@@ -124,6 +124,29 @@ describe('Stylesheet discipline', () => {
     // Completed rows are on screen in normal use, unlike a focus ring.
     expect(styles).toMatch(/\.row--done \.row__circle \{[^}]*var\(--done\)/)
   })
+
+  it('theAccentReachesSurfacesThatNeedNoDataToExist', async () => {
+    // The first version of the fix above routed the accent to completion only,
+    // which measured 0 changed pixels on an app with no completed task — i.e.
+    // the reported bug survived it for any new user. Completion is not enough:
+    // at least one accent surface has to exist before the user has any data.
+    //
+    // Asserting the property is on the rule is all a static test can do; the
+    // e2e counterpart (appearance.spec.ts) is what proves pixels actually move.
+    const { readFileSync } = await import('node:fs')
+    const styles = readFileSync('src/app/styles.css', 'utf8')
+
+    // Exactly one .nav__item--selected exists at all times (the store's default
+    // selection is the Today smart view), so this rail is unconditional.
+    expect(styles, 'selected sidebar row must carry the accent').toMatch(
+      /\.nav__item--selected::before \{[^}]*var\(--accent\)/,
+    )
+    // Below 700px the sidebar is not rendered, so the rail above is absent and
+    // the title is the only surface left. TaskList renders it in every branch.
+    expect(styles, 'list title must carry the accent').toMatch(
+      /\.list__title \{[^}]*var\(--accent\)/,
+    )
+  })
 })
 
 describe('Swatch legibility', () => {
@@ -180,6 +203,32 @@ describe('Accent-on-accent surfaces', () => {
     for (const accent of ACCENTS) {
       const light = contrastRatio(accent.light, tint(accent.light, TOKENS.paper.light, 0.1))
       const dark = contrastRatio(accent.dark, tint(accent.dark, TOKENS.paper.dark, 0.1))
+      expect(light, `${accent.label} light = ${light.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+      expect(dark, `${accent.label} dark = ${dark.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('theSidebarRailIsVisibleForEveryAccent', async () => {
+    // The rail sits on --selection, not on --paper, so clearing 4.5:1 against
+    // paper says nothing about it. It is a non-text graphical indicator, so
+    // the floor is 3:1 (WCAG 1.4.11) — and it is never the only cue, since the
+    // selected row also carries a fill and a heavier weight.
+    const { ACCENTS } = await import('../accents')
+    for (const accent of ACCENTS) {
+      const light = contrastRatio(accent.light, TOKENS.selection.light)
+      const dark = contrastRatio(accent.dark, TOKENS.selection.dark)
+      expect(light, `${accent.label} light = ${light.toFixed(2)}:1`).toBeGreaterThanOrEqual(3)
+      expect(dark, `${accent.label} dark = ${dark.toFixed(2)}:1`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('theAddButtonStaysReadableForEveryAccent', async () => {
+    // .addbar__submit is accent-on-panel, not accent-on-paper. It is a text
+    // label, so the floor is the full 4.5:1.
+    const { ACCENTS } = await import('../accents')
+    for (const accent of ACCENTS) {
+      const light = contrastRatio(accent.light, TOKENS.panel.light)
+      const dark = contrastRatio(accent.dark, TOKENS.panel.dark)
       expect(light, `${accent.label} light = ${light.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
       expect(dark, `${accent.label} dark = ${dark.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
     }

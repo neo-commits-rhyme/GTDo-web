@@ -103,4 +103,17 @@ when.
 3. Reminders that came due while closed are surfaced on next open, once.
 4. The app opens and works with the network disabled.
 5. A new deploy takes effect on next load, with no stale-cache trap.
+
+   Amended 2026-07-28, after this was measured and found false. GitHub Pages
+   serves the shell with `cache-control: max-age=600` and the header is not
+   configurable. A plain `fetch()` inside the worker is answered by the
+   browser's own HTTP cache, so "network-first" returned the *previous*
+   deploy's HTML — and therefore the previous asset hashes — for up to ten
+   minutes, taking two navigations to settle instead of one. Both the install
+   precache and the navigation fetch now pass `cache: 'reload'`, and the page
+   reloads itself once on `controllerchange`, which covers a tab that was
+   already open. The honest criterion: **a returning visitor gets the new
+   build on their next load, or immediately after one self-reload; a visitor
+   whose last visit was inside the Pages `max-age` window may need a second
+   navigation, and nothing requires a hard reload or clearing site data.**
 6. The limit is stated where the reminder is set, not only in the README.

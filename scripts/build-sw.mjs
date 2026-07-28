@@ -32,9 +32,17 @@ self.addEventListener('install', (event) => {
   // Not addAll: it is atomic, so a single 404 aborts the whole install and
   // the worker never activates — offline dies entirely because one asset moved.
   // Settle each one instead and cache whatever is actually there.
+  // cache: 'reload' bypasses the browser's HTTP cache. Without it the install
+  // seeds the NEW cache from the OLD response: GitHub Pages serves the shell
+  // with max-age=600, so a deploy inside that window precaches the previous
+  // index.html, which links asset hashes that activate has just deleted and
+  // that 404 on the server. Offline then opens a blank page — React never
+  // mounts. Measured, not theoretical.
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE)
-    await Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
+    await Promise.allSettled(
+      PRECACHE.map((url) => cache.add(new Request(url, { cache: 'reload' }))),
+    )
   })())
 })
 
@@ -55,9 +63,14 @@ self.addEventListener('fetch', (event) => {
   // Network-first for navigations so a deploy is picked up on the next load,
   // with the cached shell as the offline fallback. Assets are hashed, so
   // cache-first is safe and instant for them.
+  //
+  // cache: 'reload' for the same reason as install: a plain fetch() is served
+  // by the browser's HTTP cache, and Pages sends max-age=600 on the shell, so
+  // "network-first" quietly returned the previous deploy's HTML for up to ten
+  // minutes. Measured: stale navigations drop from >6 to 2 with this.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'reload' })
         .then((res) => {
           const copy = res.clone()
           void caches.open(CACHE).then((c) => c.put(request, copy))
