@@ -9,7 +9,9 @@
 import { atNoon, startOfDay } from './calendar'
 import { decodeAppData, encodeAppData } from './codec'
 import { CompletionHold } from './completionHold'
-import { sameID, seededAppData, type AppData, type PendingDeadline, type SidebarItem, type TaskItem, type TaskList } from './models'
+import { BuiltIn, sameID, seededAppData, type AppData, type CalendarBucket, type PendingDeadline, type SidebarItem, type TaskItem, type TaskList } from './models'
+import * as Q from './queries'
+import type { QueryContext } from './queries'
 import { BACKUP_INTERVAL_MS } from './snapshotPolicy'
 import type { StoragePort } from './ports'
 import { WriteQueue } from './writeQueue'
@@ -260,4 +262,126 @@ export class AppStore {
   protected taskIndex(id: string): number {
     return this.data.tasks.findIndex((t) => sameID(t.id, id))
   }
+
+  // MARK: - Completion hold
+
+  /**
+   * The completion state a *view* should render: the pinned value while the
+   * hold window is open, the stored value otherwise. Every query goes through
+   * this instead of reading isCompleted directly — except search, deliberately.
+   */
+  rendersCompleted(task: TaskItem): boolean {
+    return this.hold.pinFor(task.id)?.rendersCompleted ?? task.isCompleted
+  }
+
+  /**
+   * The completion date a view should sort and label by. Pinned too, so the
+   * Completed section does not resort under a held row — and a pin whose
+   * completedAt is null yields null rather than falling through to the stored
+   * value.
+   */
+  renderedCompletionDate(task: TaskItem): Date | null {
+    const pin = this.hold.pinFor(task.id)
+    return pin === null ? task.completedAt : pin.completedAt
+  }
+
+  /** A task spawned inside an open hold window; hidden until it closes. */
+  isHeldHidden(task: TaskItem): boolean {
+    return this.hold.isSuppressed(task.id)
+  }
+
+  /** The rows currently pinned in place. Pins only — never suppressions. */
+  get recentlyCompleted(): Set<string> {
+    return this.hold.pinnedIDs
+  }
+
+  private get queryContext(): QueryContext {
+    return {
+      data: this.data,
+      today: this.today,
+      rendersCompleted: (t) => this.rendersCompleted(t),
+      renderedCompletionDate: (t) => this.renderedCompletionDate(t),
+      isHeldHidden: (t) => this.isHeldHidden(t),
+    }
+  }
+
+  // MARK: - Smart views
+
+  get activeTasks(): TaskItem[] { return Q.activeTasks(this.queryContext) }
+  get todayTasks(): TaskItem[] { return Q.todayTasks(this.queryContext) }
+  get overdueTasks(): TaskItem[] { return Q.overdueTasks(this.queryContext) }
+  get completedTasks(): TaskItem[] { return Q.completedTasks(this.queryContext) }
+  get todayCompletedTasks(): TaskItem[] { return Q.todayCompletedTasks(this.queryContext) }
+  get trashedTasks(): TaskItem[] { return Q.trashedTasks(this.queryContext) }
+
+  calendarTasks(bucket: CalendarBucket): TaskItem[] {
+    return Q.calendarTasks(this.queryContext, bucket)
+  }
+
+  // MARK: - Per-list views
+
+  incompleteTasks(listID: string): TaskItem[] {
+    return Q.incompleteTasks(this.queryContext, listID)
+  }
+
+  completedTasksIn(listID: string): TaskItem[] {
+    return Q.completedTasksIn(this.queryContext, listID)
+  }
+
+  moveTargets(excludingListID: string | null): TaskList[] {
+    return Q.moveTargets(this.queryContext, excludingListID)
+  }
+
+  // MARK: - Task creation
+
+  /**
+   * Creation in a stored list lands there; in Today/Calendar it lands in Inbox
+   * due today; Completed/Trash have no add bar.
+   *
+   * Does NOT enforce the deadline-required lists — submitNewTask does — and
+   * does not touch selectedTaskID or reminders.
+   */
+  addTask(title: string, context: SidebarItem | null): TaskItem | null {
+    const trimmed = title.trim()
+    if (trimmed === '') return null
+
+    let listID: string
+    let dueDate: Date | null = null
+
+    if (context === null) return null
+    if (context.kind === 'list') {
+      listID = context.id
+    } else if (context.view === 'today' || context.view === 'calendar') {
+      listID = BuiltIn.inbox
+      dueDate = this.deadlineDay(this.today)
+    } else {
+      return null // Completed and Trash have no add bar
+    }
+
+    const item: TaskItem = {
+      id: newUUID(),
+      title: trimmed,
+      note: '',
+      dueDate,
+      reminderDate: null,
+      listID,
+      isCompleted: false,
+      completedAt: null,
+      isTrashed: false,
+      createdAt: this.now(),
+      // Max over ALL tasks including trashed and completed, so a new task
+      // always lands last globally.
+      order: Math.max(0, ...this.data.tasks.map((t) => t.order)) + 1,
+      repeatRule: null,
+      trashedAt: null,
+    }
+    this.data.tasks.push(item)
+    this.persist()
+    return item
+  }
+}
+
+/** Uppercase, matching the wire format. crypto.randomUUID is lowercase. */
+function newUUID(): string {
+  return crypto.randomUUID().toUpperCase()
 }
