@@ -4,6 +4,16 @@ export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'probes/results'] },
   ...tseslint.configs.recommended,
   {
+    // Underscore marks a parameter kept for signature compatibility.
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+    },
+  },
+  {
     // The layering rule. core/ is pure TypeScript: no React, no DOM, no storage,
     // and no ambient clock — time arrives through the injected now().
     files: ['src/core/**/*.ts'],
