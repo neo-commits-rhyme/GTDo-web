@@ -1,387 +1,551 @@
 /**
- * Single source of truth. Port of Sources/GTDo/Store/AppStore.swift.
+ * The mutation surface. Port of Sources/GTDo/Store/AppStore+Mutations.swift
+ * plus the mutating half of AppStore.swift.
  *
- * Every mutation goes through a method here and ends with persist(). Mutations
- * are synchronous in memory — the UI is correct before anything touches
- * storage — and the write is coalesced by the WriteQueue.
+ * Every mutation ends in persist(); the destructive ones force a backup, so
+ * there is always a way back from an irreversible action.
  */
 
-import { atNoon, startOfDay } from './calendar'
-import { decodeAppData, encodeAppData } from './codec'
-import { CompletionHold } from './completionHold'
-import { BuiltIn, sameID, seededAppData, type AppData, type CalendarBucket, type PendingDeadline, type SidebarItem, type TaskItem, type TaskList } from './models'
-import * as Q from './queries'
-import type { QueryContext } from './queries'
-import { BACKUP_INTERVAL_MS } from './snapshotPolicy'
-import type { StoragePort } from './ports'
-import { WriteQueue } from './writeQueue'
+import { startOfDay } from './calendar'
+import { COMPLETION_HOLD_WINDOW_MS, loadInitialState, StoreBase, type StoreDeps } from './storeBase'
+import {
+  BuiltIn, sameID, seededAppData, sidebarItemsEqual,
+  type ListGroup, type SidebarItem, type TaskItem, type TaskList, type RepeatRule,
+} from './models'
+import { nextOccurrence } from './recurrence'
+import { makeSampleData } from './seed'
 
-export type StoreDeps = {
-  adapter: StoragePort
-  /** Injected clock — core/ never reads the wall clock itself. */
-  now: () => Date
-  /**
-   * Injected scheduler for the completion-hold window. A second clock hook,
-   * because this one schedules rather than reads; tests fire it by hand.
-   */
-  scheduler: (delayMs: number, fn: () => void) => void
-}
+export { COMPLETION_HOLD_WINDOW_MS } from './storeBase'
+export type { StoreDeps } from './storeBase'
 
-/** How long a completed row is held in place after the last tap. */
-export const COMPLETION_HOLD_WINDOW_MS = 500
+/** Lists whose tasks must have a deadline; manual moves/creates into them
+ *  prompt for one first. Someday is deliberately NOT here — it is the opposite
+ *  rule, stripping deadlines. */
+export const DEADLINE_REQUIRED_LISTS: readonly string[] = [BuiltIn.nextActions, BuiltIn.waitingFor]
 
-export class AppStore {
-  data: AppData
-  selection: SidebarItem | null = { kind: 'smart', view: 'today' }
-  selectedTaskID: string | null = null
-  searchQuery = ''
-  /** A move/create into a deadline-required list awaiting the user's deadline. */
-  pendingDeadline: PendingDeadline | null = null
-  /**
-   * Set when the last save failed — the UI surfaces this, because silently
-   * running with unsaved changes is how notes disappear.
-   */
-  saveError: Error | null = null
-
-  private readonly adapter: StoragePort
-  private readonly queue: WriteQueue
-  readonly now: () => Date
-  readonly scheduler: (delayMs: number, fn: () => void) => void
-
-  /** When the last rotating backup was taken (throttles the next one). */
-  private lastBackupAt: Date | null = null
-  /**
-   * True when the record exists but couldn't be read at launch. Saving would
-   * overwrite bytes that are probably still recoverable, so we don't — and it
-   * is never cleared, matching the Swift.
-   */
-  private refusingToOverwrite = false
-
-  protected hold = new CompletionHold()
-  private subscribers = new Set<() => void>()
-
-  protected constructor(deps: StoreDeps, data: AppData) {
-    this.adapter = deps.adapter
-    this.now = deps.now
-    this.scheduler = deps.scheduler
-    this.data = data
-    this.queue = new WriteQueue(deps.adapter)
-    this.queue.onError = (e) => {
-      this.saveError = e
-      this.notify()
-    }
-    this.queue.onSuccess = () => {
-      // What is now on disk becomes the state a future snapshot copies.
-      if (this.pendingEncoded !== null) this.lastKnownGood = this.pendingEncoded
-      // A successful save clears a previous error, matching Swift's
-      // unconditional assignment of saveError in persist().
-      if (this.saveError !== null) {
-        this.saveError = null
-        this.notify()
-      }
-    }
-  }
-
-  /**
-   * Load, then construct. Async because storage is; the three-way outcome is
-   * the whole data-safety guarantee (spec §8).
-   */
+export class AppStore extends StoreBase {
   static async create(deps: StoreDeps): Promise<AppStore> {
-    const result = await deps.adapter.load()
-
-    if (result.kind === 'unreadable') {
-      // The record is there but unreadable. Start empty so the app runs, but
-      // never write over it — those bytes are the user's data.
-      const store = new AppStore(deps, seededAppData())
-      store.refusingToOverwrite = true
-      store.saveError = result.error
-      return store
-    }
-
-    if (result.kind === 'ok') {
-      try {
-        const data = decodeAppData(result.raw)
-        const store = new AppStore(deps, data)
-        // A restore point per session, before this run can change anything.
-        store.lastKnownGood = result.raw
-        const at = deps.now()
-        if (await deps.adapter.writeSnapshot(result.raw, at)) store.lastBackupAt = at
-        return store
-      } catch (e) {
-        // Readable but undecodable. Keep the bytes before anything replaces
-        // them — the web has no Finder to recover from.
-        const error = e instanceof Error ? e : new Error(String(e))
-        try {
-          await deps.adapter.quarantine(result.raw, `undecodable: ${error.message}`)
-        } catch {
-          // Quarantine is best-effort; failing it must not stop the app booting.
-        }
-        const store = new AppStore(deps, seededAppData())
-        store.saveError = error
-        return store
-      }
-    }
-
-    // Absent: a genuine first run.
-    return new AppStore(deps, seededAppData())
+    return new AppStore(deps, await loadInitialState(deps))
   }
 
-  // MARK: - Subscription
-
-  subscribe(fn: () => void): () => void {
-    this.subscribers.add(fn)
-    return () => this.subscribers.delete(fn)
-  }
-
-  protected notify(): void {
-    for (const fn of this.subscribers) fn()
-  }
-
-  // MARK: - Persistence
-
-  /**
-   * Saves the current state. `forceBackup` snapshots regardless of the
-   * throttle — destructive operations must always leave a way back.
-   */
-  persist(opts: { forceBackup?: boolean } = {}): void {
-    this.notify()
-    if (this.refusingToOverwrite) {
-      // Saving would destroy recoverable bytes. Refuse, and keep saying so.
-      this.saveError ??= new Error('The stored data could not be read; saving is disabled.')
-      return
-    }
-
-    const encoded = encodeAppData(this.data)
-
-    // Snapshot the last-known-good record BEFORE overwriting it, throttled so a
-    // burst of edits doesn't write a copy per keystroke.
-    const elapsed = this.lastBackupAt === null ? null : this.now().getTime() - this.lastBackupAt.getTime()
-    // Negative elapsed means the clock moved backwards (DST, NTP, manual
-    // change); treat it as due rather than suspending backups until real time
-    // catches up.
-    if (opts.forceBackup || elapsed === null || elapsed >= BACKUP_INTERVAL_MS || elapsed < 0) {
-      this.takeBackup()
-    }
-
-    this.pendingEncoded = encoded
-    this.queue.enqueue(encoded)
-    void this.queue.flush()
-  }
-
-  /** Awaits the pending write. Tests and the export path use this. */
-  async flushWrites(): Promise<void> {
-    await this.queue.flush()
-  }
-
-  /**
-   * Snapshots the last-known-good bytes — the state already persisted, never
-   * the state we are about to write. A snapshot is therefore always something
-   * the app previously considered good.
-   *
-   * With nothing good yet (first run) there is nothing to copy, mirroring
-   * writeBackup returning false when the data file does not exist.
-   */
-  private takeBackup(): void {
-    if (this.lastKnownGood === null) return
-    const at = this.now()
-    const snapshot = this.lastKnownGood
-    void this.adapter.writeSnapshot(snapshot, at).then((written) => {
-      // Only remember a backup that actually happened, so a failed copy is
-      // retried on the next save instead of being throttled away.
-      if (written) this.lastBackupAt = at
-    })
-  }
-
-  /** The bytes last successfully loaded or written — the pre-mutation state. */
-  private lastKnownGood: string | null = null
-  /** The bytes currently being written, promoted to lastKnownGood on success. */
-  private pendingEncoded: string | null = null
-
-  /**
-   * A backup that is valid JSON but missing the built-in lists would leave no
-   * Inbox to file into and an empty sidebar. Restore any that are absent rather
-   * than rejecting the import or leaving the app unusable.
-   *
-   * Appends, and matches by id only — a list carrying the Inbox id under a
-   * different name counts as present and is not renamed.
-   */
-  healingBuiltIns(imported: AppData): AppData {
-    const healed: AppData = { ...imported, lists: [...imported.lists], groups: [...imported.groups] }
-    const seed = seededAppData()
-
-    const present = new Set(healed.lists.map((l) => l.id.toUpperCase()))
-    for (const l of seed.lists) if (!present.has(l.id.toUpperCase())) healed.lists.push(l)
-
-    const groupsPresent = new Set(healed.groups.map((g) => g.id.toUpperCase()))
-    for (const g of seed.groups) if (!groupsPresent.has(g.id.toUpperCase())) healed.groups.push(g)
-
-    return healed
-  }
-
-  /**
-   * Replace everything with an imported document, backing up first so the
-   * import itself is undoable from the snapshot list.
-   */
-  importData(imported: AppData): void {
-    this.takeBackup()
-    this.data = this.healingBuiltIns(imported)
-    this.selection = { kind: 'smart', view: 'today' }
-    this.selectedTaskID = null
-    this.searchQuery = ''
-    this.pendingDeadline = null
+  private withTask(id: string, mutate: (t: TaskItem) => void): void {
+    const i = this.taskIndex(id)
+    if (i < 0) return
+    mutate(this.data.tasks[i]!)
     this.persist()
   }
 
-  // MARK: - Lookup
-
-  /** Local midnight — deadlines are stored at noon, so every day comparison
-   *  goes through startOfDay rather than comparing instants. */
-  get today(): Date {
-    return startOfDay(this.now())
+  private withList(id: string, mutate: (l: TaskList) => void): void {
+    const i = this.data.lists.findIndex((l) => sameID(l.id, id))
+    if (i < 0) return
+    mutate(this.data.lists[i]!)
+    this.persist()
   }
 
-  /** The given date's day, pinned to local noon. */
-  deadlineDay(date: Date): Date {
-    return atNoon(date)
-  }
+  // MARK: - Task field mutations
 
   /**
-   * Frozen copies, not live references: callers snapshot a task and read it
-   * back after mutating.
+   * A deadline is a day, not an instant, so it is pinned to local noon.
+   * Clearing it also clears the repeat rule — a repeat needs a deadline.
    */
-  task(id: string): Readonly<TaskItem> | null {
-    const t = this.data.tasks.find((t) => sameID(t.id, id))
-    return t === undefined ? null : Object.freeze({ ...t })
+  setDueDate(id: string, date: Date | null): void {
+    this.withTask(id, (t) => {
+      t.dueDate = date === null ? null : this.deadlineDay(date)
+      if (date === null) t.repeatRule = null
+    })
   }
 
-  list(id: string): Readonly<TaskList> | null {
-    const l = this.data.lists.find((l) => sameID(l.id, id))
-    return l === undefined ? null : Object.freeze({ ...l })
+  addToToday(id: string): void {
+    if (this.task(id)?.isTrashed !== false) return
+    this.setDueDate(id, this.today)
   }
 
-  protected taskIndex(id: string): number {
-    return this.data.tasks.findIndex((t) => sameID(t.id, id))
+  /** Reminders are instants, stored exactly as given — no noon pinning. */
+  setReminder(id: string, date: Date | null): void {
+    this.withTask(id, (t) => { t.reminderDate = date })
+    this.syncReminder(id)
   }
 
-  // MARK: - Completion hold
-
-  /**
-   * The completion state a *view* should render: the pinned value while the
-   * hold window is open, the stored value otherwise. Every query goes through
-   * this instead of reading isCompleted directly — except search, deliberately.
-   */
-  rendersCompleted(task: TaskItem): boolean {
-    return this.hold.pinFor(task.id)?.rendersCompleted ?? task.isCompleted
+  /** Notes are stored verbatim; an empty note is legal, unlike a title. */
+  setNote(id: string, note: string): void {
+    this.withTask(id, (t) => { t.note = note })
   }
 
-  /**
-   * The completion date a view should sort and label by. Pinned too, so the
-   * Completed section does not resort under a held row — and a pin whose
-   * completedAt is null yields null rather than falling through to the stored
-   * value.
-   */
-  renderedCompletionDate(task: TaskItem): Date | null {
-    const pin = this.hold.pinFor(task.id)
-    return pin === null ? task.completedAt : pin.completedAt
-  }
-
-  /** A task spawned inside an open hold window; hidden until it closes. */
-  isHeldHidden(task: TaskItem): boolean {
-    return this.hold.isSuppressed(task.id)
-  }
-
-  /** The rows currently pinned in place. Pins only — never suppressions. */
-  get recentlyCompleted(): Set<string> {
-    return this.hold.pinnedIDs
-  }
-
-  private get queryContext(): QueryContext {
-    return {
-      data: this.data,
-      today: this.today,
-      rendersCompleted: (t) => this.rendersCompleted(t),
-      renderedCompletionDate: (t) => this.renderedCompletionDate(t),
-      isHeldHidden: (t) => this.isHeldHidden(t),
-    }
-  }
-
-  // MARK: - Smart views
-
-  get activeTasks(): TaskItem[] { return Q.activeTasks(this.queryContext) }
-  get todayTasks(): TaskItem[] { return Q.todayTasks(this.queryContext) }
-  get overdueTasks(): TaskItem[] { return Q.overdueTasks(this.queryContext) }
-  get completedTasks(): TaskItem[] { return Q.completedTasks(this.queryContext) }
-  get todayCompletedTasks(): TaskItem[] { return Q.todayCompletedTasks(this.queryContext) }
-  get trashedTasks(): TaskItem[] { return Q.trashedTasks(this.queryContext) }
-
-  calendarTasks(bucket: CalendarBucket): TaskItem[] {
-    return Q.calendarTasks(this.queryContext, bucket)
-  }
-
-  // MARK: - Per-list views
-
-  incompleteTasks(listID: string): TaskItem[] {
-    return Q.incompleteTasks(this.queryContext, listID)
-  }
-
-  completedTasksIn(listID: string): TaskItem[] {
-    return Q.completedTasksIn(this.queryContext, listID)
-  }
-
-  moveTargets(excludingListID: string | null): TaskList[] {
-    return Q.moveTargets(this.queryContext, excludingListID)
-  }
-
-  // MARK: - Task creation
-
-  /**
-   * Creation in a stored list lands there; in Today/Calendar it lands in Inbox
-   * due today; Completed/Trash have no add bar.
-   *
-   * Does NOT enforce the deadline-required lists — submitNewTask does — and
-   * does not touch selectedTaskID or reminders.
-   */
-  addTask(title: string, context: SidebarItem | null): TaskItem | null {
+  renameTask(id: string, title: string): void {
     const trimmed = title.trim()
-    if (trimmed === '') return null
+    if (trimmed === '') return
+    this.withTask(id, (t) => { t.title = trimmed })
+    // The scheduled notification body carries the title.
+    this.syncReminder(id)
+  }
 
-    let listID: string
-    let dueDate: Date | null = null
+  /**
+   * THE SOMEDAY RULE: moving into Someday strips both the deadline and the
+   * repeat rule. No other list mutates fields on move.
+   *
+   * Does not enforce the deadline-required lists (requestMove does), does not
+   * validate that the target exists, and does not change `order`.
+   */
+  moveTask(id: string, listID: string): void {
+    // A trashed task's listID is its restore destination — moving it would
+    // silently corrupt where Restore puts it back.
+    if (this.task(id)?.isTrashed !== false) return
+    this.withTask(id, (t) => {
+      t.listID = listID
+      if (sameID(listID, BuiltIn.someday)) {
+        t.dueDate = null
+        t.repeatRule = null
+      }
+    })
+  }
 
-    if (context === null) return null
-    if (context.kind === 'list') {
-      listID = context.id
-    } else if (context.view === 'today' || context.view === 'calendar') {
-      listID = BuiltIn.inbox
-      dueDate = this.deadlineDay(this.today)
-    } else {
-      return null // Completed and Trash have no add bar
-    }
+  /**
+   * Reorders a list's incomplete tasks by redistributing their existing global
+   * `order` slots among themselves — no other task is affected, and there is no
+   * renumbering or compaction.
+   *
+   * `destination` follows SwiftUI's onMove semantics: an insertion index into
+   * the PRE-removal array, so moving item 0 down one requires destination 2.
+   */
+  moveIncompleteTasks(listID: string, from: number[], destination: number): void {
+    const tasks = this.incompleteTasks(listID)
+    const slots = tasks.map((t) => t.order).sort((a, b) => a - b)
 
-    const item: TaskItem = {
+    const moving = from.map((i) => tasks[i]).filter((t): t is TaskItem => t !== undefined)
+    const movingIDs = new Set(moving.map((t) => t.id))
+    const remaining = tasks.filter((t) => !movingIDs.has(t.id))
+    // The insertion point is expressed against the pre-removal array, so shift
+    // it back by however many moved items sat before it.
+    const removedBefore = from.filter((i) => i < destination).length
+    const insertAt = Math.max(0, Math.min(destination - removedBefore, remaining.length))
+    remaining.splice(insertAt, 0, ...moving)
+
+    remaining.forEach((task, n) => {
+      const i = this.taskIndex(task.id)
+      const slot = slots[n]
+      if (i >= 0 && slot !== undefined) this.data.tasks[i]!.order = slot
+    })
+    this.persist()
+  }
+
+  // MARK: - Completion
+
+  toggleCompleted(id: string): void {
+    const i = this.taskIndex(id)
+    if (i < 0) return
+    const t = this.data.tasks[i]!
+    if (t.isTrashed) return // trashed tasks cannot be toggled at all
+
+    t.isCompleted = !t.isCompleted
+    t.completedAt = t.isCompleted ? this.now() : null
+
+    // Un-completing does NOT delete a previously spawned occurrence and does
+    // not restore the old dueDate; the original keeps its rule, so re-completing
+    // spawns another one. Ported as-is from the macOS behaviour.
+    if (t.isCompleted && t.repeatRule !== null) this.spawnNextOccurrence(t, t.repeatRule)
+
+    this.syncReminder(id)
+    this.persist()
+  }
+
+  /**
+   * Complete/un-complete from a tap on the circle: toggle now, migrate later.
+   * The row keeps its place for the hold window, and every tap restarts the
+   * window, so a run down the column never reflows mid-run.
+   *
+   * A full swipe calls toggleCompleted directly and migrates immediately — the
+   * swipe has already given its own spatial confirmation.
+   */
+  toggleCompletedHolding(id: string): void {
+    const before = this.task(id)
+    if (before === null || before.isTrashed) return
+
+    const existing = new Set(this.data.tasks.map((t) => t.id))
+    this.toggleCompleted(id)
+    // A recurrence spawn appeared: hide it for the rest of the window.
+    this.hold.suppress(this.data.tasks.map((t) => t.id).filter((tid) => !existing.has(tid)))
+
+    const generation = this.hold.pin(id, before.isCompleted, before.completedAt)
+    this.scheduler(COMPLETION_HOLD_WINDOW_MS, () => {
+      this.releaseCompletionHold(generation)
+    })
+  }
+
+  /** Close the hold window if nothing has happened since `generation`.
+   *  Does NOT persist — the hold is pure view state. */
+  releaseCompletionHold(generation: number): boolean {
+    const released = this.hold.release(generation)
+    if (released) this.notify()
+    return released
+  }
+
+  /** Drop the hold immediately — the screen went away or a full swipe wants
+   *  its row gone now. */
+  flushCompletionHold(): boolean {
+    const released = this.hold.releaseNow()
+    if (released) this.notify()
+    return released
+  }
+
+  // MARK: - Recurrence
+
+  setRepeatRule(id: string, rule: RepeatRule | null): void {
+    this.withTask(id, (t) => {
+      if (rule === null) {
+        // Asymmetric with setDueDate(null), which DOES clear the rule.
+        t.repeatRule = null
+        return
+      }
+      t.repeatRule = { ...rule, interval: Math.max(1, rule.interval) }
+      // Setting a rule can silently create a deadline of today-noon.
+      if (t.dueDate === null) t.dueDate = this.deadlineDay(this.today)
+    })
+  }
+
+  nextOccurrence(after: Date, rule: RepeatRule): Date {
+    return nextOccurrence(after, rule, this.today)
+  }
+
+  /** Copies title, note and list only — not the reminder, not the deadline's
+   *  time-of-day, not completion state. Does not persist; the caller does. */
+  private spawnNextOccurrence(task: TaskItem, rule: RepeatRule): void {
+    this.data.tasks.push({
       id: newUUID(),
-      title: trimmed,
-      note: '',
-      dueDate,
+      title: task.title,
+      note: task.note,
+      dueDate: this.deadlineDay(this.nextOccurrence(task.dueDate ?? this.today, rule)),
       reminderDate: null,
-      listID,
+      listID: task.listID,
       isCompleted: false,
       completedAt: null,
       isTrashed: false,
       createdAt: this.now(),
-      // Max over ALL tasks including trashed and completed, so a new task
-      // always lands last globally.
       order: Math.max(0, ...this.data.tasks.map((t) => t.order)) + 1,
-      repeatRule: null,
+      repeatRule: rule,
       trashedAt: null,
-    }
-    this.data.tasks.push(item)
-    this.persist()
-    return item
+    })
   }
+
+  // MARK: - Trash
+
+  trashTask(id: string): void {
+    const i = this.taskIndex(id)
+    if (i < 0) return
+    const t = this.data.tasks[i]!
+    t.isTrashed = true
+    // Trashing an already-trashed task refreshes the stamp, resetting its
+    // purge clock. Does not clear listID (the restore destination) and does not
+    // change completion state.
+    t.trashedAt = this.now()
+    if (this.selectedTaskID !== null && sameID(this.selectedTaskID, id)) this.selectedTaskID = null
+    this.syncReminder(id)
+    this.persist()
+  }
+
+  /** Deliberately bypasses the Someday and deadline-required rules. */
+  restoreTask(id: string): void {
+    const item = this.task(id)
+    if (item === null) return
+    // The list may have been deleted while the task sat in the trash.
+    const target = this.list(item.listID) === null ? BuiltIn.inbox : item.listID
+    this.withTask(id, (t) => {
+      t.isTrashed = false
+      t.trashedAt = null
+      t.listID = target
+    })
+    this.syncReminder(id)
+  }
+
+  /** No guard at all: works on non-trashed tasks and on unknown ids. */
+  deleteTaskPermanently(id: string): void {
+    this.cancelReminder(id)
+    this.data.tasks = this.data.tasks.filter((t) => !sameID(t.id, id))
+    if (this.selectedTaskID !== null && sameID(this.selectedTaskID, id)) this.selectedTaskID = null
+    this.persist({ forceBackup: true })
+  }
+
+  /** Unconditional: persists and force-backs-up even when the trash was empty,
+   *  and does not clear selectedTaskID. */
+  emptyTrash(): void {
+    for (const t of this.data.tasks) if (t.isTrashed) this.cancelReminder(t.id)
+    this.data.tasks = this.data.tasks.filter((t) => !t.isTrashed)
+    this.persist({ forceBackup: true })
+  }
+
+  /**
+   * Auto-empty. Tasks trashed before the stamp existed (trashedAt === null) are
+   * NEVER auto-purged, and the cutoff is strict. The early return prevents a
+   * save and a backup on every launch.
+   */
+  purgeTrash(olderThanDays: number): void {
+    const cutoff = new Date(this.now())
+    cutoff.setDate(cutoff.getDate() - olderThanDays)
+    const expired = this.data.tasks.filter(
+      (t) => t.isTrashed && t.trashedAt !== null && t.trashedAt < cutoff,
+    )
+    if (expired.length === 0) return
+    const ids = new Set(expired.map((t) => t.id))
+    for (const id of ids) this.cancelReminder(id)
+    this.data.tasks = this.data.tasks.filter((t) => !ids.has(t.id))
+    this.persist({ forceBackup: true })
+  }
+
+  // MARK: - Projects
+
+  /**
+   * A new list in the Projects group named after the task, with the task itself
+   * moved in as the project's first item.
+   *
+   * This MOVES and never deletes. An earlier macOS version removed the task
+   * here, destroying its note, deadline, reminder and completion history with
+   * no Trash recovery, from a one-click menu item. Moving keeps every field,
+   * keeps the reminder live, and makes the operation reversible.
+   */
+  convertToProject(id: string): TaskList | null {
+    const item = this.task(id)
+    if (item === null || item.isTrashed) return null
+    const project: TaskList = {
+      id: newUUID(),
+      name: item.title, // the raw title, not trimmed here
+      isBuiltIn: false,
+      groupID: BuiltIn.projectsGroup,
+      order: Math.max(0, ...this.data.lists.map((l) => l.order)) + 1,
+      colorHex: null,
+      symbol: null,
+    }
+    this.data.lists.push(project)
+    this.moveTask(id, project.id)
+    this.syncReminder(id)
+    this.persist()
+    return project
+  }
+
+  // MARK: - List CRUD
+
+  addList(name: string, groupID: string | null): TaskList | null {
+    const trimmed = name.trim()
+    if (trimmed === '') return null
+    const list: TaskList = {
+      id: newUUID(),
+      name: trimmed,
+      isBuiltIn: false,
+      groupID,
+      // Global max+1. Note moveListsInGroup renumbers 0..n WITHIN a group, so
+      // orders can tie across groups — safe only because every read sorts
+      // within a single group scope.
+      order: Math.max(0, ...this.data.lists.map((l) => l.order)) + 1,
+      colorHex: null,
+      symbol: null,
+    }
+    this.data.lists.push(list)
+    this.persist()
+    return list
+  }
+
+  renameList(id: string, name: string): void {
+    const trimmed = name.trim()
+    if (trimmed === '' || this.list(id)?.isBuiltIn !== false) return
+    this.withList(id, (l) => { l.name = trimmed })
+  }
+
+  /** Deleting a list trashes its live tasks rather than destroying them. */
+  deleteList(id: string): void {
+    if (this.list(id)?.isBuiltIn !== false) return
+    for (const t of this.data.tasks) {
+      if (sameID(t.listID, id) && !t.isTrashed) {
+        t.isTrashed = true
+        t.trashedAt = this.now()
+        this.cancelReminder(t.id)
+      }
+    }
+    this.data.lists = this.data.lists.filter((l) => !sameID(l.id, id))
+    if (sidebarItemsEqual(this.selection, { kind: 'list', id })) {
+      this.selection = { kind: 'smart', view: 'today' }
+    }
+    this.persist({ forceBackup: true })
+  }
+
+  moveList(id: string, groupID: string | null): void {
+    if (this.list(id)?.isBuiltIn !== false) return
+    this.withList(id, (l) => { l.groupID = groupID })
+  }
+
+  /** Customization — user lists only; built-ins keep their fixed look. */
+  setListColor(id: string, hex: string | null): void {
+    if (this.list(id)?.isBuiltIn !== false) return
+    this.withList(id, (l) => { l.colorHex = hex })
+  }
+
+  setListSymbol(id: string, symbol: string | null): void {
+    if (this.list(id)?.isBuiltIn !== false) return
+    this.withList(id, (l) => { l.symbol = symbol })
+  }
+
+  // MARK: - Group CRUD
+
+  addGroup(name: string): ListGroup | null {
+    const trimmed = name.trim()
+    if (trimmed === '') return null
+    const group: ListGroup = {
+      id: newUUID(),
+      name: trimmed,
+      isBuiltIn: false,
+      // Projects is order 0, so user groups start at 1.
+      order: Math.max(0, ...this.data.groups.map((g) => g.order)) + 1,
+    }
+    this.data.groups.push(group)
+    this.persist()
+    return group
+  }
+
+  renameGroup(id: string, name: string): void {
+    const trimmed = name.trim()
+    const i = this.data.groups.findIndex((g) => sameID(g.id, id))
+    if (trimmed === '' || i < 0 || this.data.groups[i]!.isBuiltIn) return
+    this.data.groups[i]!.name = trimmed
+    this.persist()
+  }
+
+  /** Deleting a group keeps its lists — they become ungrouped. */
+  deleteGroup(id: string): void {
+    const group = this.data.groups.find((g) => sameID(g.id, id))
+    if (group === undefined || group.isBuiltIn) return
+    for (const l of this.data.lists) if (l.groupID !== null && sameID(l.groupID, id)) l.groupID = null
+    this.data.groups = this.data.groups.filter((g) => !sameID(g.id, id))
+    this.persist({ forceBackup: true })
+  }
+
+  // MARK: - Whole-store operations
+
+  /** Wipe back to the seeded defaults. Deliberately does NOT re-arm reminders —
+   *  only importData does. */
+  resetAllData(): void {
+    for (const t of this.data.tasks) this.cancelReminder(t.id)
+    this.data = seededAppData()
+    this.selection = { kind: 'smart', view: 'today' }
+    this.selectedTaskID = null
+    this.searchQuery = ''
+    this.persist({ forceBackup: true })
+  }
+
+  /** Sample reminders are metadata only, so loading demo data never fires alerts. */
+  loadSampleData(): void {
+    for (const t of this.data.tasks) this.cancelReminder(t.id)
+    this.data = makeSampleData(this.now())
+    this.selection = { kind: 'smart', view: 'today' }
+    this.selectedTaskID = null
+    this.searchQuery = ''
+    this.persist({ forceBackup: true })
+  }
+
+  // MARK: - Deadline-required moves
+
+  /**
+   * Move tasks to `target`, requiring a deadline when the target demands one.
+   * Tasks that already have one move immediately; those without raise the
+   * prompt and move once it is set.
+   */
+  requestMove(ids: string[], target: string): void {
+    const movable = ids.filter((id) => this.task(id)?.isTrashed === false)
+    if (movable.length === 0) return
+
+    if (!DEADLINE_REQUIRED_LISTS.some((l) => sameID(l, target))) {
+      for (const id of movable) this.moveTask(id, target)
+      return
+    }
+
+    for (const id of movable) if (this.task(id)?.dueDate != null) this.moveTask(id, target)
+    const needing = movable.filter((id) => this.task(id)?.dueDate == null)
+    if (needing.length > 0) this.pendingDeadline = { kind: 'move', taskIDs: needing, target }
+  }
+
+  /**
+   * Add-bar submission. With a `deadline` supplied the task is created and
+   * dated in one call; without one, creating directly in a deadline-required
+   * list creates nothing and raises the prompt instead.
+   */
+  submitNewTask(title: string, context: SidebarItem | null, deadline: Date | null = null): TaskItem | null {
+    if (
+      context !== null && context.kind === 'list' &&
+      DEADLINE_REQUIRED_LISTS.some((l) => sameID(l, context.id)) && deadline === null
+    ) {
+      const trimmed = title.trim()
+      if (trimmed === '') return null
+      // The stored title is already trimmed.
+      this.pendingDeadline = { kind: 'create', title: trimmed, target: context.id }
+      return null
+    }
+
+    const created = this.addTask(title, context)
+    if (created === null) return null
+    if (deadline !== null) this.setDueDate(created.id, deadline)
+    return this.task(created.id)
+  }
+
+  completePendingDeadline(deadline: Date): void {
+    const pending = this.pendingDeadline
+    if (pending === null) return
+    if (pending.kind === 'move') {
+      for (const id of pending.taskIDs) {
+        this.setDueDate(id, deadline)
+        this.moveTask(id, pending.target)
+      }
+    } else {
+      const created = this.addTask(pending.title, { kind: 'list', id: pending.target })
+      if (created !== null) this.setDueDate(created.id, deadline)
+    }
+    this.pendingDeadline = null
+    this.notify()
+  }
+
+  cancelPendingDeadline(): void {
+    this.pendingDeadline = null
+    this.notify()
+  }
+
+  // MARK: - Sidebar queries
+
+  userGroups(): ListGroup[] {
+    return this.data.groups.filter((g) => !g.isBuiltIn).sort((a, b) => a.order - b.order)
+  }
+
+  listsInGroup(groupID: string | null): TaskList[] {
+    return this.data.lists
+      .filter((l) => (groupID === null ? l.groupID === null : l.groupID !== null && sameID(l.groupID, groupID)))
+      .sort((a, b) => a.order - b.order)
+  }
+
+  ungroupedUserLists(): TaskList[] {
+    return this.data.lists
+      .filter((l) => l.groupID === null && !l.isBuiltIn)
+      .sort((a, b) => a.order - b.order)
+  }
+
+  // MARK: - Reminders (scheduling itself lands in sub-project 5)
+
+  /**
+   * Cancel-then-reschedule for one task. The single source of truth for when a
+   * reminder is live: future date, not completed, not trashed. Strict `>`, so a
+   * reminder exactly at now is not scheduled. Does not persist.
+   */
+  syncReminder(id: string): void {
+    this.cancelReminder(id)
+    const t = this.task(id)
+    if (t === null || t.reminderDate === null) return
+    if (t.reminderDate > this.now() && !t.isCompleted && !t.isTrashed) {
+      this.scheduleReminder(id, t.title, t.reminderDate)
+    }
+  }
+
+  /** No-ops until sub-project 5 wires the Notifications API. */
+  protected cancelReminder(_id: string): void {}
+  protected scheduleReminder(_id: string, _title: string, _at: Date): void {}
 }
 
 /** Uppercase, matching the wire format. crypto.randomUUID is lowercase. */
 function newUUID(): string {
   return crypto.randomUUID().toUpperCase()
 }
+
+/** Re-exported so callers can compute "today" without a store. */
+export { startOfDay }
