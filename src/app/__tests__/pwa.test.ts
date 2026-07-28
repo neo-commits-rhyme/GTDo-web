@@ -96,7 +96,8 @@ describe('Install resilience', () => {
   it('doesNotUseAtomicAddAll', () => {
     // addAll is atomic: one 404 aborts the install, the worker never activates,
     // and offline dies entirely because a single asset moved.
-    expect(sw).not.toContain('addAll(')
+    // Match a real call, not the word in a comment explaining why it is absent.
+    expect(sw).not.toMatch(/cache\.addAll\(|caches\.open\([^)]*\)\.then\(\(c\) => c\.addAll/)
     expect(sw).toContain('allSettled')
   })
 })
