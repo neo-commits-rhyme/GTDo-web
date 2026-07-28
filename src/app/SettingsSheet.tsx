@@ -3,6 +3,9 @@ import type { SnapshotMeta } from '../core/ports'
 import { downloadExport, importText, restoreSnapshot } from './transfer'
 import { useStore, useStoreTick } from './useStore'
 import { useTheme, type ThemeChoice } from './theme/useTheme'
+import { useAccent } from './theme/useAccent'
+import { ACCENTS } from './theme/accents'
+import { readableInkOn } from './theme/contrast'
 
 export const AUTO_EMPTY_TRASH_KEY = 'gtdo.autoEmptyTrash'
 
@@ -17,6 +20,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const [autoEmpty, setAutoEmpty] = useState(autoEmptyTrashEnabled)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [theme, setTheme] = useTheme()
+  const [accent, setAccent] = useAccent()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { void store.listSnapshots().then(setSnapshots) }, [store])
@@ -55,6 +59,26 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             </label>
           ))}
         </fieldset>
+
+        <div className="swatches swatches--accent" role="radiogroup" aria-label="Accent colour">
+          {ACCENTS.map((a) => {
+            const selected = accent === a.id
+            return (
+              <button
+                key={a.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={a.label}
+                className={`swatch${selected ? ' swatch--selected' : ''}`}
+                style={{ '--swatch': a.light, '--swatch-ink': readableInkOn(a.light) } as React.CSSProperties}
+                onClick={() => setAccent(a.id)}
+              >
+                {selected && <span className="swatch__check" aria-hidden="true">✓</span>}
+              </button>
+            )
+          })}
+        </div>
 
         <label className="settings__row">
           <input

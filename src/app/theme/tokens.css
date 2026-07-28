@@ -29,7 +29,7 @@
   --rule: #D6D0C2;
   --selection: #E4E0D4;
 
-  --accent: #96570F;
+  --accent: var(--accent-light, #96570F);
 
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
@@ -59,7 +59,7 @@
     --overdue: #F0866A;
     --rule: #3A3631;
     --selection: #2B2926;
-    --accent: #D99441;
+    --accent: var(--accent-dark, #D99441);
     --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
     --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
     --scrim: rgb(0 0 0 / 60%);
@@ -79,7 +79,7 @@
   --overdue: #A8331B;
   --rule: #D6D0C2;
   --selection: #E4E0D4;
-  --accent: #96570F;
+  --accent: var(--accent-light, #96570F);
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
   --scrim: rgb(0 0 0 / 40%);
@@ -96,7 +96,7 @@
   --overdue: #F0866A;
   --rule: #3A3631;
   --selection: #2B2926;
-  --accent: #D99441;
+  --accent: var(--accent-dark, #D99441);
   --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
   --scrim: rgb(0 0 0 / 60%);

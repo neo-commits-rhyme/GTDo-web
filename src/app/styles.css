@@ -121,6 +121,7 @@ body {
 .nav__edit:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 
 .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 4px; }
+.swatches--accent { grid-template-columns: repeat(7, 1fr); max-width: 260px; margin: 8px 0 4px; }
 .swatch {
   aspect-ratio: 1; border-radius: 50%; border: 2px solid transparent;
   background: var(--swatch); cursor: pointer; display: grid; place-items: center;
