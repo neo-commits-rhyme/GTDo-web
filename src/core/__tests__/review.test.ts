@@ -37,7 +37,7 @@ describe('Review steps', () => {
 describe('Terminal classification', () => {
   it('aStepAdvanceIsNotTerminal', () => {
     // Same task, new question — the card stays put.
-    for (const c of ['goToNextActions', 'goToDefer', 'goToDoIt', 'goToDelegate'] as ReviewChoice[]) {
+    for (const c of ['goToDefer', 'goToNextActions', 'goToDoIt', 'goToDelegate'] as ReviewChoice[]) {
       expect(isTerminal(c), c).toBe(false)
       expect(stepTarget(c), c).not.toBeNull()
     }
@@ -45,7 +45,7 @@ describe('Terminal classification', () => {
   })
 
   it('everythingThatRemovesTheCardIsTerminal', () => {
-    for (const c of ['file', 'makeProject', 'skip', 'someday', 'notes', 'delete', 'commitDeadline'] as ReviewChoice[]) {
+    for (const c of ['projects', 'delete', 'someday', 'notes', 'commitDeadline'] as ReviewChoice[]) {
       expect(isTerminal(c), c).toBe(true)
     }
   })
@@ -58,14 +58,26 @@ describe('Terminal classification', () => {
   })
 })
 
-describe('Rails', () => {
-  it('everyStepHasExactlyOneProminentChoice', () => {
-    for (const step of STEPS) {
-      const prominent = railFor(step).filter((r) => r.prominent)
-      expect(prominent.length, step).toBe(1)
-      // Always first: the highest-frequency choice leads.
-      expect(railFor(step)[0]!.prominent, step).toBe(true)
-    }
+describe('Rails match the macOS sheet', () => {
+  it('theRootOffersDeferNextActionsAndProjects', () => {
+    // Not the iPhone rail — no File…, no Make it a project…, no Skip.
+    expect(railFor('root').map((r) => r.title)).toEqual(['Defer', 'Next Actions', 'Projects'])
+  })
+
+  it('deferOffersDeleteSomedayAndNotesInThatOrder', () => {
+    // Delete is FIRST on the Mac and carries key 1. That is safe here in a way
+    // a swipe would not be: it moves the task to Trash, not out of existence.
+    expect(railFor('defer').map((r) => r.title)).toEqual(['Delete', 'Someday', 'Notes'])
+    expect(railFor('defer')[0]!.destructive).toBe(true)
+  })
+
+  it('nextActionsOffersDoItAndDelegateIt', () => {
+    expect(railFor('nextActions').map((r) => r.title)).toEqual(['Do It', 'Delegate It'])
+  })
+
+  it('theTwoDeadlineStepsNameTheirDestination', () => {
+    expect(railFor('doIt')[0]!.title).toBe('Set deadline & move to Next Actions')
+    expect(railFor('delegate')[0]!.title).toBe('Set deadline & move to Waiting For')
   })
 
   it('deleteIsTheOnlyDestructiveChoice', () => {
@@ -73,98 +85,64 @@ describe('Rails', () => {
     expect(destructive.map((r) => r.choice)).toEqual(['delete'])
   })
 
-  it('deleteAndTheTwoPickersHaveNoAccelerator', () => {
-    // A reflex must not reach an unconfirmed delete, and the pickers need a
-    // decision no accelerator can express.
-    const barred = STEPS.flatMap((s) => railFor(s)).filter((r) => !r.acceleratable)
-    expect(barred.map((r) => r.choice).sort()).toEqual(['delete', 'file', 'makeProject'])
+  it('everyChoiceCarriesAnIcon', () => {
+    for (const step of STEPS) {
+      for (const r of railFor(step)) expect(r.icon, r.title).not.toBe('')
+    }
   })
 
-  it('everyOtherChoiceIsAcceleratable', () => {
-    const ok = STEPS.flatMap((s) => railFor(s)).filter((r) => r.acceleratable)
-    expect(ok.length).toBeGreaterThan(0)
-    for (const r of ok) expect(['delete', 'file', 'makeProject']).not.toContain(r.choice)
-  })
-
-  it('theTwoDeadlineStepsNameTheirDestination', () => {
-    // "Set deadline & move" is ambiguous when the two steps look identical.
-    expect(railFor('doIt')[0]!.title).toContain('Next actions')
-    expect(railFor('delegate')[0]!.title).toContain('Waiting for')
+  it('noStepOffersMoreThanThreeChoicesSoTheKeysStayOneDigit', () => {
+    for (const step of STEPS) expect(railFor(step).length, step).toBeLessThanOrEqual(3)
   })
 })
 
 describe('The frozen queue', () => {
-  it('startsAtTheFrontWithNothingProcessed', () => {
-    const q = new ReviewQueue(['a', 'b', 'c'])
+  it('walksTheListAndReportsAOneBasedPosition', () => {
+    let q = new ReviewQueue(['a', 'b', 'c'])
     expect(q.current).toBe('a')
-    expect(q.processed).toBe(0)
+    expect(q.position).toBe(1)
     expect(q.total).toBe(3)
     expect(q.isFinished).toBe(false)
-  })
 
-  it('consumeAdvancesTheCounter', () => {
-    const q = new ReviewQueue(['a', 'b']).consume()
+    q = q.advance()
     expect(q.current).toBe('b')
-    expect(q.processed).toBe(1)
-    expect(q.total).toBe(2)
-  })
-
-  it('skipRotatesWithoutAdvancingTheCounter', () => {
-    // An index-based counter would lie the moment anything is skipped.
-    const q = new ReviewQueue(['a', 'b', 'c']).rotate()
-    expect(q.current).toBe('b')
-    expect(q.pending).toEqual(['b', 'c', 'a'])
-    expect(q.processed).toBe(0)
+    expect(q.position).toBe(2)
     expect(q.total).toBe(3)
   })
 
-  it('theCounterSurvivesAnySequenceOfSkips', () => {
-    let q = new ReviewQueue(['a', 'b', 'c'])
-    q = q.rotate().rotate().rotate().rotate()
-    expect(q.total).toBe(3)
-    expect(q.processed).toBe(0)
-    q = q.consume()
-    expect(q.processed).toBe(1)
-    expect(q.total).toBe(3)
-  })
-
-  it('rotatingASingleCardIsANoOp', () => {
-    // Otherwise Skip on the last task would spin forever looking like progress.
-    const q = new ReviewQueue(['a'])
-    expect(q.rotate().pending).toEqual(['a'])
-  })
-
-  it('finishesOnlyWhenNothingPends', () => {
-    const q = new ReviewQueue(['a']).consume()
+  it('finishesAfterTheLastTask', () => {
+    const q = new ReviewQueue(['a']).advance()
     expect(q.isFinished).toBe(true)
     expect(q.current).toBeNull()
-    expect(q.processed).toBe(1)
-    expect(q.total).toBe(1)
   })
 
-  it('consumingAnEmptyQueueIsSafe', () => {
-    const q = new ReviewQueue([]).consume()
+  it('advancingPastTheEndIsSafe', () => {
+    const q = new ReviewQueue(['a']).advance().advance()
     expect(q.isFinished).toBe(true)
-    expect(q.processed).toBe(0)
+    expect(q.current).toBeNull()
+    expect(q.position).toBe(1) // clamped, never past the total
   })
 
-  it('dropsATaskThatVanishedMidReview', () => {
-    // Deleted in another tab, or removed by an undo.
-    const q = new ReviewQueue(['a', 'b', 'c']).drop('b')
-    expect(q.pending).toEqual(['a', 'c'])
-    expect(q.total).toBe(2)
-  })
-
-  it('droppingIsCaseInsensitiveAndSafeForUnknownIDs', () => {
-    const q = new ReviewQueue(['AAAA-1', 'b'])
-    expect(q.drop('aaaa-1').pending).toEqual(['b'])
-    expect(q.drop('nope').pending).toEqual(['AAAA-1', 'b'])
+  it('anEmptyQueueIsFinishedImmediately', () => {
+    const q = new ReviewQueue([])
+    expect(q.isFinished).toBe(true)
+    expect(q.total).toBe(0)
   })
 
   it('isImmutableSoAStaleReferenceCannotCorruptThePosition', () => {
     const first = new ReviewQueue(['a', 'b'])
-    first.consume()
-    expect(first.current).toBe('a') // untouched
+    first.advance()
+    expect(first.current).toBe('a')
+  })
+
+  it('theTotalNeverChangesAsYouWalk', () => {
+    // The count is the queue captured at open, not what is left in the Inbox.
+    let q = new ReviewQueue(['a', 'b', 'c'])
+    for (let i = 0; i < 3; i += 1) {
+      expect(q.total).toBe(3)
+      q = q.advance()
+    }
+    expect(q.total).toBe(3)
   })
 })
 

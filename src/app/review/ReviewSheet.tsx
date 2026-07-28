@@ -1,21 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { formatDateInput, parseDateInput } from '../format'
+import { ReviewIcon } from './ReviewIcon'
 import { useReview } from './useReview'
 
 /**
- * Keyboard-first triage: one task, one question.
+ * The macOS Review sheet: header with the count, the task, then the step's
+ * buttons pinned to the bottom with their key caps.
  *
- * Keys are positional — 1/2/3 in button order for the current step — so the
- * same key backs a different action on each screen, exactly as the macOS
- * defaults do. There is no editor; see spec §1.
+ * Keys are positional — 1/2/3 in button order — so the same key backs a
+ * different action on each step, exactly as the Mac does.
  *
- * Delete, File… and Make it a project… have no key. A reflex must not reach an
- * unconfirmed delete, and the two pickers need a decision no accelerator can
- * express. The rail carries that as `acceleratable`, so the rule lives in the
- * data rather than in a comment here.
+ * Esc is handled here once: it backs out a step, or dismisses at the root. The
+ * Back button is therefore pointer-only, so Esc never fires both.
  */
 export function ReviewSheet({ onClose }: { onClose: () => void }) {
-  const { step, queue, current, rail, canGoBack, deadline, setDeadline, choose } = useReview(onClose)
+  const { step, queue, current, rail, canGoBack, deadline, setDeadline, choose } = useReview()
   const panel = useRef<HTMLDivElement>(null)
 
   useEffect(() => { panel.current?.focus() }, [])
@@ -37,76 +36,85 @@ export function ReviewSheet({ onClose }: { onClose: () => void }) {
 
       const n = Number(e.key)
       if (!Number.isInteger(n) || n < 1) return
-      // Positional over the acceleratable subset, so Delete never lands on a
-      // number just because it happens to sit third in the rail.
-      const reachable = rail.filter((r) => r.acceleratable)
-      const item = reachable[n - 1]
+      const item = rail[n - 1]
       if (item === undefined) return
       e.preventDefault()
+      // Capture-phase plus stopPropagation is what keeps the app's global digit
+      // shortcuts from also firing — otherwise 2 would mean both "Next Actions"
+      // and "go to Calendar".
       e.stopPropagation()
       choose(item.choice)
     }
-    // Capture, so the app's global digit shortcuts never see these keys while
-    // Review is open — otherwise 2 would mean both "Defer" and "go to Calendar".
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [rail, canGoBack, choose, onClose])
-
-  if (current === null) return null
-
-  const reachable = rail.filter((r) => r.acceleratable)
-  const keyFor = (choice: string) => {
-    const i = reachable.findIndex((r) => r.choice === choice)
-    return i < 0 ? null : String(i + 1)
-  }
 
   return (
     <div className="prompt" role="dialog" aria-modal="true" aria-label="Inbox Review">
       <div className="prompt__panel review" ref={panel} tabIndex={-1}>
         <div className="review__header">
-          {canGoBack && (
-            <button type="button" className="review__back" onClick={() => choose('back')}>
-              ‹ Back
-            </button>
-          )}
-          <span className="review__progress">
-            {queue.processed + 1} of {queue.total}
-          </span>
-          <button type="button" onClick={onClose} aria-label="Close review">✕</button>
+          <div>
+            <h2 className="review__heading">Inbox Review</h2>
+            {current !== null && (
+              <p className="review__progress">{queue.position} of {queue.total}</p>
+            )}
+          </div>
+          <button type="button" className="review__done" onClick={onClose}>Done</button>
         </div>
+        <hr className="review__divider" />
 
-        <h2 className="review__title">{current.title}</h2>
-        {current.note !== '' && <p className="review__note">{current.note}</p>}
+        {current === null ? (
+          <div className="review__empty">
+            <h3>Inbox Zero</h3>
+            <p>Every inbox task has been processed.</p>
+          </div>
+        ) : (
+          <>
+            <div className="review__card">
+              <h3 className="review__title">{current.title}</h3>
+              {current.note !== '' && <p className="review__note">{current.note}</p>}
+            </div>
 
-        {(step === 'doIt' || step === 'delegate') && (
-          <label className="prompt__field">
-            <span>Deadline</span>
-            <input
-              type="date"
-              defaultValue={formatDateInput(deadline)}
-              onChange={(e) => {
-                const parsed = parseDateInput(e.target.value)
-                if (parsed !== null) setDeadline(parsed)
-              }}
-            />
-          </label>
-        )}
-
-        <div className="review__rail">
-          {rail.map((r) => (
-            <button
-              key={r.choice}
-              type="button"
-              className={`review__choice${r.prominent ? ' review__choice--prominent' : ''}${r.destructive ? ' review__choice--destructive' : ''}`}
-              onClick={() => choose(r.choice)}
-            >
-              <span>{r.title}</span>
-              {keyFor(r.choice) !== null && (
-                <kbd className="review__key">{keyFor(r.choice)}</kbd>
+            <div className="review__rail">
+              {(step === 'doIt' || step === 'delegate') && (
+                <label className="prompt__field">
+                  <span>Deadline</span>
+                  <input
+                    type="date"
+                    value={formatDateInput(deadline)}
+                    onChange={(e) => {
+                      const parsed = parseDateInput(e.target.value)
+                      if (parsed !== null) setDeadline(parsed)
+                    }}
+                  />
+                </label>
               )}
-            </button>
-          ))}
-        </div>
+
+              {rail.map((r, i) => (
+                <button
+                  key={r.choice}
+                  type="button"
+                  className={`review__choice${r.destructive ? ' review__choice--destructive' : ''}`}
+                  onClick={() => choose(r.choice)}
+                >
+                  <span className="review__choice-label">
+                    <ReviewIcon name={r.icon} />
+                    {r.title}
+                  </span>
+                  {/* Overlaid at the trailing edge so the key cap does not push
+                      the centred title off-centre, as on the Mac. */}
+                  <kbd className="review__key">{i + 1}</kbd>
+                </button>
+              ))}
+
+              {canGoBack && (
+                <button type="button" className="review__back" onClick={() => choose('back')}>
+                  Back
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

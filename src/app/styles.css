@@ -170,30 +170,66 @@ body {
 }
 .list__review:disabled { color: var(--ink-tertiary); cursor: default; }
 
-.review { min-width: min(480px, 92vw); }
-.review__header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.review__back, .review__header button {
-  font: inherit; background: none; border: 0; cursor: pointer; color: var(--ink-secondary);
+/* The macOS sheet: fixed size, header with the count, task, then the step's
+   buttons pinned to the bottom. */
+.review {
+  width: min(460px, 92vw); min-height: 460px;
+  display: flex; flex-direction: column; gap: 14px;
 }
+.review__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.review__heading { font-size: 14px; font-weight: 680; margin: 0; }
 .review__progress {
-  flex: 1; text-align: center; font: 11px/1 var(--mono);
-  font-variant-numeric: tabular-nums; color: var(--ink-secondary);
+  font: 11px/1.4 var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary); margin: 2px 0 0;
 }
-.review__title { font-size: 18px; font-weight: 640; margin: 0 0 6px; }
-.review__note { color: var(--ink-secondary); margin: 0 0 14px; white-space: pre-wrap; }
-.review__rail { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.review__done {
+  font: inherit; font-weight: 600; cursor: pointer; padding: 5px 14px;
+  border-radius: 6px; border: 1px solid var(--rule);
+  background: var(--panel); color: var(--accent);
+}
+.review__divider { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+.review__card { flex: 1; }
+.review .review__title {
+  font-size: 19px; font-weight: 640; margin: 0 0 8px; line-height: 1.25;
+  text-transform: none; letter-spacing: 0; color: var(--ink);
+}
+.review__note {
+  color: var(--ink-secondary); margin: 0; white-space: pre-wrap;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.review__empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 4px; }
+.review .review__empty h3 {
+  margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--ink);
+}
+.review__empty p { margin: 0; color: var(--ink-secondary); }
+
+.review__rail { display: flex; flex-direction: column; gap: 8px; }
 .review__choice {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  font: inherit; cursor: pointer; padding: 9px 12px; border-radius: 7px;
-  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
-  text-align: left;
+  position: relative; display: flex; align-items: center; justify-content: center;
+  font: inherit; cursor: pointer; padding: 9px 14px; border-radius: 8px;
+  border: 1px solid transparent; text-align: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
 }
-.review__choice:hover { background: var(--selection); }
-.review__choice--prominent { border-color: var(--accent); font-weight: 620; }
-.review__choice--destructive { color: var(--overdue); }
+.review__choice:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.review__choice--destructive {
+  background: color-mix(in srgb, var(--overdue) 10%, transparent); color: var(--overdue);
+}
+.review__choice--destructive:hover { background: color-mix(in srgb, var(--overdue) 18%, transparent); }
+.review__choice-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.review__icon { flex: none; }
+/* Absolute, so the key cap never pushes the centred title off-centre. */
 .review__key {
-  font: 10px/1 var(--mono); padding: 3px 6px; border-radius: 4px;
-  border: 1px solid var(--rule); color: var(--ink-secondary);
+  position: absolute; right: 10px;
+  font: 10px/1 var(--mono); font-variant-numeric: tabular-nums;
+  padding: 3px 7px; border-radius: 4px;
+  background: color-mix(in srgb, currentColor 16%, transparent); color: inherit;
+}
+.review__back {
+  font: inherit; cursor: pointer; background: none; border: 0;
+  color: var(--ink-secondary); padding: 4px;
 }
 
 .list__title {
@@ -300,7 +336,10 @@ body {
 
 .undobar {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
-  display: flex; gap: 12px; align-items: center; z-index: 25;
+  display: flex; gap: 12px; align-items: center;
+  /* Above the modal scrim: a Review action is undoable, so the affordance must
+     be reachable while the sheet that produced it is still open. */
+  z-index: 40;
   padding: 8px 10px 8px 14px; border-radius: 8px;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--rule); box-shadow: var(--shadow-dialog);
