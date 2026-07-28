@@ -34,8 +34,14 @@ Ported verbatim from the Swift, because the reasoning is unchanged:
 > silently destroy a weekly recurrence.
 
 So an `UndoAction` carries **the affected tasks exactly as they were**, plus the
-ids of any tasks the mutation *created* — un-completing a repeating task does
-not remove the occurrence completing it spawned, so undo has to.
+ids of anything the mutation *created*:
+
+- **Tasks** — un-completing a repeating task does not remove the occurrence
+  completing it spawned, so undo has to.
+- **Lists** — `convertToProject` creates a list as well as moving the task, and
+  restoring the task alone left an empty project behind. Spawned lists are
+  deleted *last*, once the snapshots have moved their tasks back out, because
+  `deleteList` trashes whatever still lives in the list.
 
 ### 2.2 The API that makes the snapshot un-forgettable
 

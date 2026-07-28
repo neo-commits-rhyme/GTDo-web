@@ -193,3 +193,20 @@ describe('The Review sheet', () => {
     expect(within(sheet).getByText('1 of 2')).toBeTruthy()
   })
 })
+
+describe('Undoing Projects from inside Review', () => {
+  it('removesTheCreatedListAndReturnsTheTaskToTheInbox', async () => {
+    const user = userEvent.setup()
+    const { store, undo } = await mount(['Redesign the site'])
+    await openReview(user)
+    await user.keyboard('3') // Projects
+
+    const project = store.data.lists.find((l) => l.name === 'Redesign the site')
+    expect(project).toBeDefined()
+
+    undo.undo(store)
+    expect(store.data.tasks[0]!.listID).toBe(BuiltIn.inbox)
+    expect(store.data.tasks[0]!.isTrashed).toBe(false)
+    expect(store.data.lists.find((l) => l.name === 'Redesign the site')).toBeUndefined()
+  })
+})

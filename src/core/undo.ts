@@ -33,6 +33,12 @@ export type UndoAction = {
    * remove the occurrence completing it spawned, so undo has to.
    */
   spawnedIDs: string[]
+  /**
+   * Lists the mutation *created*. convertToProject makes a list as well as
+   * moving the task, and restoring the task alone left the empty project
+   * behind.
+   */
+  spawnedListIDs: string[]
 }
 
 export function undoLabel(verb: string, count: number): string {
@@ -90,10 +96,17 @@ function restore(snapshot: TaskItem, store: AppStore): void {
 }
 
 export function reverse(action: UndoAction, store: AppStore): void {
-  // Spawns go first: restoring the original may re-run the logic that made
-  // them, and a leftover occurrence is the exact bug snapshots exist to avoid.
+  // Spawned tasks go first: restoring the original may re-run the logic that
+  // made them, and a leftover occurrence is the exact bug snapshots exist to
+  // avoid.
   for (const id of action.spawnedIDs) store.deleteTaskPermanently(id)
+
   for (const snapshot of action.snapshots) restore(snapshot, store)
+
+  // Spawned lists go LAST, once the snapshots have moved their tasks back out.
+  // deleteList trashes whatever still lives in the list, so removing a project
+  // before restoring its task would trash the very task we are restoring.
+  for (const id of action.spawnedListIDs) store.deleteList(id)
 }
 
 /**
@@ -134,13 +147,15 @@ export class UndoCenter {
       .filter((t): t is Readonly<TaskItem> => t !== null)
       .map((t) => ({ ...t }))
     const before = new Set(store.data.tasks.map((t) => t.id))
+    const listsBefore = new Set(store.data.lists.map((l) => l.id))
 
     mutate()
 
     const spawnedIDs = store.data.tasks.map((t) => t.id).filter((id) => !before.has(id))
-    if (snapshots.length === 0 && spawnedIDs.length === 0) return
+    const spawnedListIDs = store.data.lists.map((l) => l.id).filter((id) => !listsBefore.has(id))
+    if (snapshots.length === 0 && spawnedIDs.length === 0 && spawnedListIDs.length === 0) return
 
-    this.present({ label, snapshots, spawnedIDs })
+    this.present({ label, snapshots, spawnedIDs, spawnedListIDs })
   }
 
   private present(action: UndoAction): void {

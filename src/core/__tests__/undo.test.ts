@@ -179,3 +179,51 @@ describe('Undo', () => {
     expect(ticks).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe('Undoing a project conversion', () => {
+  it('removesTheListItCreated', async () => {
+    // Reported: undo restored the task to the Inbox but left the empty project
+    // behind. convertToProject makes a LIST as well as moving the task, and
+    // spawnedIDs only ever tracked tasks.
+    const s = await store()
+    const t = s.addTask('Redesign the site', { kind: 'list', id: BuiltIn.inbox })!
+    const undo = held()
+
+    undo.perform('filed', [t.id], s, () => { s.convertToProject(t.id) })
+    const project = s.data.lists.find((l) => l.name === 'Redesign the site')!
+    expect(project).toBeDefined()
+    expect(s.task(t.id)!.listID).toBe(project.id)
+
+    undo.undo(s)
+    expect(s.task(t.id)!.listID).toBe(BuiltIn.inbox)
+    expect(s.data.lists.find((l) => l.name === 'Redesign the site')).toBeUndefined()
+  })
+
+  it('doesNotTrashTheTaskItIsRestoring', async () => {
+    // deleteList trashes whatever still lives in the list, so the order of
+    // restore-then-delete is load-bearing.
+    const s = await store()
+    const t = s.addTask('Redesign the site', { kind: 'list', id: BuiltIn.inbox })!
+    const undo = held()
+    undo.perform('filed', [t.id], s, () => { s.convertToProject(t.id) })
+    undo.undo(s)
+    expect(s.task(t.id)!.isTrashed).toBe(false)
+  })
+
+  it('leavesListsItDidNotCreateAlone', async () => {
+    const s = await store()
+    const existing = s.addList('Work', null)!
+    const t = s.addTask('thing', { kind: 'list', id: BuiltIn.inbox })!
+    const undo = held()
+    undo.perform('moved', [t.id], s, () => s.moveTask(t.id, existing.id))
+    undo.undo(s)
+    expect(s.list(existing.id)).not.toBeNull()
+  })
+
+  it('recordsNothingWhenAMutationCreatesNeitherTaskNorList', async () => {
+    const s = await store()
+    const undo = held()
+    undo.perform('trashed', ['99999999-0000-0000-0000-000000000000'], s, () => {})
+    expect(undo.pending).toBeNull()
+  })
+})
