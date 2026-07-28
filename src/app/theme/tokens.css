@@ -24,12 +24,11 @@
   --ink: #24221D;
   --ink-secondary: #6B655A;
   --ink-tertiary: #8B8578;
-  --done: #96570F;
+  --accent: var(--accent-light, #96570F);
+  --done: var(--accent);
   --overdue: #A8331B;
   --rule: #D6D0C2;
   --selection: #E4E0D4;
-
-  --accent: var(--accent-light, #96570F);
 
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
@@ -55,11 +54,11 @@
     --ink: #ECEBE7;
     --ink-secondary: #A29C92;
     --ink-tertiary: #79736A;
-    --done: #D99441;
+    --accent: var(--accent-dark, #D99441);
+    --done: var(--accent);
     --overdue: #F0866A;
     --rule: #3A3631;
     --selection: #2B2926;
-    --accent: var(--accent-dark, #D99441);
     --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
     --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
     --scrim: rgb(0 0 0 / 60%);
@@ -75,11 +74,11 @@
   --ink: #24221D;
   --ink-secondary: #6B655A;
   --ink-tertiary: #8B8578;
-  --done: #96570F;
+  --accent: var(--accent-light, #96570F);
+  --done: var(--accent);
   --overdue: #A8331B;
   --rule: #D6D0C2;
   --selection: #E4E0D4;
-  --accent: var(--accent-light, #96570F);
   --shadow-panel: 0 0 32px rgb(0 0 0 / 18%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 22%);
   --scrim: rgb(0 0 0 / 40%);
@@ -92,11 +91,11 @@
   --ink: #ECEBE7;
   --ink-secondary: #A29C92;
   --ink-tertiary: #79736A;
-  --done: #D99441;
+  --accent: var(--accent-dark, #D99441);
+  --done: var(--accent);
   --overdue: #F0866A;
   --rule: #3A3631;
   --selection: #2B2926;
-  --accent: var(--accent-dark, #D99441);
   --shadow-panel: 0 0 32px rgb(0 0 0 / 55%);
   --shadow-dialog: 0 12px 40px rgb(0 0 0 / 60%);
   --scrim: rgb(0 0 0 / 60%);

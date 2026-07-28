@@ -15,7 +15,15 @@ export const TOKENS = {
   inkSecondary: { light: '#6B655A', dark: '#A29C92' },
   /** 3.48 / 3.78 — disabled glyphs and placeholders ONLY. */
   inkTertiary: { light: '#8B8578', dark: '#79736A' },
-  /** Completion. Light was #A8621B at exactly 4.50:1; now 5.44:1. */
+  /**
+   * Completion — the DEFAULT only. The live value follows the chosen accent
+   * (tokens.css sets `--done: var(--accent)`), which is what makes the accent
+   * picker visible at all; before that it reached only focus rings and the
+   * Review sheet. Every accent is held to this same floor by the contrast
+   * suite.
+   *
+   * Light was #A8621B at exactly 4.50:1; now 5.44:1.
+   */
   done: { light: '#96570F', dark: '#D99441' },
   overdue: { light: '#A8331B', dark: '#F0866A' },
   /** Hairlines. Decorative — never the only separator between information. */

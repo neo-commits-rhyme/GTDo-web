@@ -97,10 +97,32 @@ describe('Stylesheet discipline', () => {
     const { readFileSync } = await import('node:fs')
     const css = readFileSync('src/app/theme/tokens.css', 'utf8')
     for (const [name, value] of Object.entries(TOKENS)) {
+      // `done` is derived from the accent rather than declared literally; its
+      // TOKENS entry is the default, and the accent fallbacks in tokens.css
+      // carry those exact values.
+      if (name === 'done') {
+        expect(css).toContain(`--accent: var(--accent-light, ${value.light})`)
+        expect(css).toContain(`--accent: var(--accent-dark, ${value.dark})`)
+        expect(css).toContain('--done: var(--accent)')
+        continue
+      }
       const prop = `--${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`
       expect(css, `${prop} light`).toContain(`${prop}: ${value.light}`)
       expect(css, `${prop} dark`).toContain(`${prop}: ${value.dark}`)
     }
+  })
+
+  it('theAccentReachesSomethingThatIsActuallyDrawn', async () => {
+    // The bug this guards: the accent changed a token nothing rendered, so
+    // choosing a colour did nothing you could see. Completion is where this
+    // design puts colour, so that is what it drives.
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/app/theme/tokens.css', 'utf8')
+    expect(css).toContain('--done: var(--accent)')
+
+    const styles = readFileSync('src/app/styles.css', 'utf8')
+    // Completed rows are on screen in normal use, unlike a focus ring.
+    expect(styles).toMatch(/\.row--done \.row__circle \{[^}]*var\(--done\)/)
   })
 })
 
