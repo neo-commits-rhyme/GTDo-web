@@ -629,9 +629,22 @@ export class AppStore extends StoreBase {
     }
   }
 
-  /** No-ops until sub-project 5 wires the Notifications API. */
-  protected cancelReminder(_id: string): void {}
-  protected scheduleReminder(_id: string, _title: string, _at: Date): void {}
+  protected cancelReminder(id: string): void {
+    this.reminders.cancel(id)
+  }
+
+  protected scheduleReminder(id: string, title: string, at: Date): void {
+    this.reminders.schedule(id, title, at)
+  }
+
+  /**
+   * Arms every live reminder. Called once after a load, and by importData —
+   * which is the only whole-store replacement that re-arms, matching the Swift.
+   */
+  override armAllReminders(): void {
+    this.reminders.cancelAll()
+    for (const t of this.data.tasks) this.syncReminder(t.id)
+  }
 }
 
 /** Uppercase, matching the wire format. crypto.randomUUID is lowercase. */

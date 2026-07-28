@@ -15,7 +15,7 @@ import { BuiltIn, sameID, seededAppData, type AppData, type CalendarBucket, type
 import * as Q from './queries'
 import type { QueryContext } from './queries'
 import { BACKUP_INTERVAL_MS } from './snapshotPolicy'
-import type { SnapshotMeta, StoragePort } from './ports'
+import { noopReminderPort, type ReminderPort, type SnapshotMeta, type StoragePort } from './ports'
 import { WriteQueue } from './writeQueue'
 
 export type StoreDeps = {
@@ -27,6 +27,8 @@ export type StoreDeps = {
    * because this one schedules rather than reads; tests fire it by hand.
    */
   scheduler: (delayMs: number, fn: () => void) => void
+  /** Optional: without one, reminders are stored but never scheduled. */
+  reminders?: ReminderPort
 }
 
 
@@ -98,6 +100,7 @@ export class StoreBase {
   private readonly queue: WriteQueue
   readonly now: () => Date
   readonly scheduler: (delayMs: number, fn: () => void) => void
+  protected readonly reminders: ReminderPort
 
   /** When the last rotating backup was taken (throttles the next one). */
   protected lastBackupAt: Date | null = null
@@ -115,6 +118,7 @@ export class StoreBase {
     this.adapter = deps.adapter
     this.now = deps.now
     this.scheduler = deps.scheduler
+    this.reminders = deps.reminders ?? noopReminderPort
     this.data = init.data
     this.lastKnownGood = init.lastKnownGood
     this.lastBackupAt = init.lastBackupAt
@@ -271,7 +275,14 @@ export class StoreBase {
     this.searchQuery = ''
     this.pendingDeadline = null
     this.persist()
+    // The only whole-store replacement that re-arms reminders. resetAllData
+    // and loadSampleData deliberately do not — sample reminders are metadata,
+    // not alerts to fire.
+    this.armAllReminders()
   }
+
+  /** Overridden in AppStore, which owns syncReminder. */
+  protected armAllReminders(): void {}
 
   // MARK: - Lookup
 

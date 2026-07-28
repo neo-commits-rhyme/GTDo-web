@@ -46,3 +46,21 @@ export interface StoragePort {
    */
   quarantine(raw: string, reason: string): Promise<void>
 }
+
+/**
+ * Where a scheduled reminder goes. Declared here for the same reason
+ * StoragePort is: the store needs *a* scheduler and must not know it is a
+ * browser timer feeding the Notifications API.
+ */
+export interface ReminderPort {
+  schedule(id: string, title: string, at: Date): void
+  cancel(id: string): void
+  cancelAll(): void
+}
+
+/** The default, so a store constructed without one behaves exactly as before. */
+export const noopReminderPort: ReminderPort = {
+  schedule: () => {},
+  cancel: () => {},
+  cancelAll: () => {},
+}
