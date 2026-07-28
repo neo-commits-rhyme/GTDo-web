@@ -1,0 +1,173 @@
+{
+  "groups" : [
+    {
+      "id" : "00000000-0000-0000-0000-0000000000AA",
+      "isBuiltIn" : true,
+      "name" : "Projects",
+      "order" : 0
+    },
+    {
+      "id" : "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+      "isBuiltIn" : false,
+      "name" : "Areas",
+      "order" : 1
+    }
+  ],
+  "gtdOrder" : [
+    "00000000-0000-0000-0000-000000000002",
+    "00000000-0000-0000-0000-000000000003",
+    "00000000-0000-0000-0000-000000000004",
+    "00000000-0000-0000-0000-000000000005",
+    "00000000-0000-0000-0000-0000000000AA"
+  ],
+  "lists" : [
+    {
+      "id" : "00000000-0000-0000-0000-000000000001",
+      "isBuiltIn" : true,
+      "name" : "Inbox",
+      "order" : 0
+    },
+    {
+      "id" : "00000000-0000-0000-0000-000000000002",
+      "isBuiltIn" : true,
+      "name" : "Next actions",
+      "order" : 1
+    },
+    {
+      "id" : "00000000-0000-0000-0000-000000000003",
+      "isBuiltIn" : true,
+      "name" : "Waiting for...",
+      "order" : 2
+    },
+    {
+      "id" : "00000000-0000-0000-0000-000000000004",
+      "isBuiltIn" : true,
+      "name" : "Someday",
+      "order" : 3
+    },
+    {
+      "id" : "00000000-0000-0000-0000-000000000005",
+      "isBuiltIn" : true,
+      "name" : "Notes",
+      "order" : 4
+    },
+    {
+      "colorHex" : "#FF8800",
+      "groupID" : "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+      "id" : "11111111-2222-3333-4444-555555555555",
+      "isBuiltIn" : false,
+      "name" : "Work\/Home",
+      "order" : 5,
+      "symbol" : "star.fill"
+    }
+  ],
+  "tasks" : [
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "id" : "00000000-0000-0000-0000-00000000000B",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000001",
+      "note" : "",
+      "order" : 0,
+      "title" : "bare\/slashed title"
+    },
+    {
+      "completedAt" : "2023-11-17T22:13:20Z",
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-15T22:13:20Z",
+      "id" : "DEADBEEF-0000-0000-0000-00000000FFFF",
+      "isCompleted" : true,
+      "isTrashed" : true,
+      "listID" : "11111111-2222-3333-4444-555555555555",
+      "note" : "note with \/ slash and \"quote\"",
+      "order" : 7,
+      "reminderDate" : "2023-11-16T22:13:20Z",
+      "repeatRule" : {
+        "interval" : 3,
+        "unit" : "weekday"
+      },
+      "title" : "full",
+      "trashedAt" : "2023-11-18T22:13:20Z"
+    },
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-15T22:13:20Z",
+      "id" : "00000000-1111-2222-3333-444444444444",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000002",
+      "note" : "",
+      "order" : 10,
+      "repeatRule" : {
+        "interval" : 1,
+        "unit" : "day"
+      },
+      "title" : "repeats day"
+    },
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-16T22:13:20Z",
+      "id" : "00000001-1111-2222-3333-444444444444",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000002",
+      "note" : "",
+      "order" : 11,
+      "repeatRule" : {
+        "interval" : 2,
+        "unit" : "weekday"
+      },
+      "title" : "repeats weekday"
+    },
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-17T22:13:20Z",
+      "id" : "00000002-1111-2222-3333-444444444444",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000002",
+      "note" : "",
+      "order" : 12,
+      "repeatRule" : {
+        "interval" : 3,
+        "unit" : "week"
+      },
+      "title" : "repeats week"
+    },
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-18T22:13:20Z",
+      "id" : "00000003-1111-2222-3333-444444444444",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000002",
+      "note" : "",
+      "order" : 13,
+      "repeatRule" : {
+        "interval" : 4,
+        "unit" : "month"
+      },
+      "title" : "repeats month"
+    },
+    {
+      "createdAt" : "2023-11-14T22:13:20Z",
+      "dueDate" : "2023-11-19T22:13:20Z",
+      "id" : "00000004-1111-2222-3333-444444444444",
+      "isCompleted" : false,
+      "isTrashed" : false,
+      "listID" : "00000000-0000-0000-0000-000000000002",
+      "note" : "",
+      "order" : 14,
+      "repeatRule" : {
+        "interval" : 5,
+        "unit" : "year"
+      },
+      "title" : "repeats year"
+    }
+  ],
+  "userOrder" : [
+    "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+    "11111111-2222-3333-4444-555555555555"
+  ]
+}
