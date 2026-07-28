@@ -39,8 +39,6 @@ describe('The reminder limit is stated where it applies', () => {
     vi.stubGlobal('Notification', { permission: 'denied' })
     await mount()
     expect(screen.getByText(/blocked in your browser/)).toBeTruthy()
-    // And says catch-up still works, so the feature degrades to something.
-    expect(screen.getByText(/still listed next time you open GTDo/)).toBeTruthy()
   })
 
   it('explainsWhenTheBrowserHasNoNotificationsAtAll', async () => {
@@ -48,6 +46,19 @@ describe('The reminder limit is stated where it applies', () => {
     await mount()
     expect(screen.getByText(/no notifications/)).toBeTruthy()
   })
+
+  it.each(['default', 'granted', 'denied', 'unsupported'])(
+    'statesTheOpenTabLimitAndCatchUpEvenWhenPermissionIs(%s)',
+    async (permission) => {
+      // The limit holds in every state — including denied, where the first
+      // draft of this copy mentioned only the block and not the limit.
+      cleanup()
+      vi.stubGlobal('Notification', permission === 'unsupported' ? undefined : { permission })
+      await mount()
+      expect(screen.getByText(/open in a tab/)).toBeTruthy()
+      expect(screen.getByText(/listed next time you open/)).toBeTruthy()
+    },
+  )
 
   it('requestsPermissionOnTheFirstReminderNotOnLoad', async () => {
     const requestPermission = vi.fn(async () => 'granted')

@@ -17,11 +17,11 @@ function reminderHint(permission: PermissionState): string {
     case 'granted':
       return 'Fires only while GTDo is open in a tab. Anything missed is listed next time you open it.'
     case 'denied':
-      return 'Notifications are blocked in your browser. Missed reminders are still listed next time you open GTDo.'
+      return 'Notifications are blocked in your browser, and they would only fire while GTDo is open in a tab anyway. Anything missed is listed next time you open it.'
     case 'unsupported':
-      return 'This browser has no notifications. Missed reminders are still listed next time you open GTDo.'
+      return 'This browser has no notifications. Reminders would only fire while GTDo is open in a tab; anything missed is listed next time you open it.'
     case 'default':
-      return 'Fires only while GTDo is open in a tab. Your browser will ask permission when you set this.'
+      return 'Fires only while GTDo is open in a tab. Your browser will ask permission when you set this, and anything missed is listed next time you open it.'
   }
 }
 

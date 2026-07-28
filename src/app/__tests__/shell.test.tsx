@@ -262,3 +262,20 @@ describe('Save failure', () => {
     expect(within(alert).getByRole('button', { name: 'Export now' })).toBeTruthy()
   })
 })
+
+describe('Notices are actually usable', () => {
+  it('bannersDoNotShareTheHeadersGridCell', async () => {
+    // Both banners once sat in the header's own cell, so the bar covered them
+    // and swallowed their buttons. Found by a Playwright click timing out;
+    // jsdom does not compute grid areas, so this asserts on the stylesheet.
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/app/styles.css', 'utf8')
+
+    for (const selector of ['.banner', '.catchup']) {
+      const rule = new RegExp(`\\${selector} \\{[^}]*grid-area: (\\w+)`).exec(css)
+      expect(rule, `${selector} must declare a grid-area`).not.toBeNull()
+      expect(rule![1], `${selector} must not share the bar's cell`).toBe('notice')
+    }
+    expect(css).toMatch(/grid-template-areas: "notice notice" "bar bar"/)
+  })
+})
