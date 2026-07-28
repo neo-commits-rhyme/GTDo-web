@@ -80,7 +80,11 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
 
       <h2 className="nav__heading">GTD</h2>
       <ul className="nav__group">
-        {listLink(store.data.lists[0]!.id)}
+        {/* By id, never by position: an imported document keeps its own list
+            order and healingBuiltIns appends a missing Inbox at the END, so
+            lists[0] is any list at all — which rendered that list twice and
+            left Inbox with no row anywhere. */}
+        {listLink(BuiltIn.inbox)}
         {gtdEntries.map((entry) =>
           entry.kind === 'list' ? (
             <li key={entry.list.id}>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { missedReminders } from '../../core/catchUp'
-import { readLastSeen, writeLastSeen } from './lastSeen'
+import { markCaughtUp, sinceLastOpen } from './lastSeen'
 import { useStore, useStoreTick } from '../useStore'
 
 /**
@@ -14,9 +14,10 @@ export function CatchUpBanner() {
   useStoreTick()
   const store = useStore()
   const [dismissed, setDismissed] = useState(false)
-  // Read once, at mount: the stamp is advanced on dismiss, and re-reading it
+  // The stamp as it stood when the tab opened, never the stored one: the
+  // heartbeat and dismissal both push the stored stamp forward, so reading that
   // would make the banner erase itself as soon as anything else re-rendered.
-  const [since] = useState(readLastSeen)
+  const [since] = useState(sinceLastOpen)
 
   const missed = useMemo(
     () => missedReminders(store.data, since, store.now()),
@@ -26,7 +27,7 @@ export function CatchUpBanner() {
   if (dismissed || missed.length === 0) return null
 
   const dismiss = () => {
-    writeLastSeen(store.now())
+    markCaughtUp(store.now())
     setDismissed(true)
   }
 

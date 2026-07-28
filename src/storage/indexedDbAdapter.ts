@@ -18,6 +18,42 @@ import type { LoadResult, SnapshotMeta, StoragePort } from '../core/ports'
 const DB_VERSION = 1
 const DATA_KEY = 'appdata'
 const STORES = { data: 'data', snapshots: 'snapshots', quarantine: 'quarantine', meta: 'meta' } as const
+const CHANNEL_PREFIX = 'gtdo-writes:'
+
+/**
+ * The document plus the revision that stamps it.
+ *
+ * Two tabs is ordinary usage, and each holds its own full copy loaded at boot.
+ * Every save rewrites the whole record, so without a revision the second tab to
+ * save deletes everything the first one did, silently. The revision is what
+ * makes that detectable — see persist().
+ *
+ * The value shape changed but the schema did not, so DB_VERSION stays at 1: a
+ * bump would fire onversionchange in every open tab, which is a far bigger
+ * event than reading one extra field. Records written before this existed are
+ * bare strings and must keep loading — asRecord() is the only reader.
+ */
+type DataRecord = { raw: string; revision: number }
+
+function asRecord(value: unknown): DataRecord | null {
+  if (typeof value === 'string') return { raw: value, revision: 0 }
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Partial<DataRecord>
+  if (typeof record.raw !== 'string') return null
+  return { raw: record.raw, revision: typeof record.revision === 'number' ? record.revision : 0 }
+}
+
+/**
+ * A save refused because another tab moved the record on. Reported through the
+ * store's saveError: losing this save loudly beats overwriting the other tab's
+ * work silently, which is what happened before.
+ */
+export class StaleWriteError extends Error {
+  constructor(readonly storedRevision: number, readonly seenRevision: number) {
+    super('Another tab saved a newer version of this data. Reload to see it — this change was not saved.')
+    this.name = 'StaleWriteError'
+  }
+}
 
 function promisify<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -36,8 +72,33 @@ function txDone(tx: IDBTransaction): Promise<void> {
 
 export class IndexedDbAdapter implements StoragePort {
   private db: Promise<IDBDatabase> | null = null
+  /**
+   * The revision this tab's in-memory document came from. 0 means nothing has
+   * been seen yet, which is also what an empty database reads as.
+   */
+  private seenRevision = 0
+  private readonly channel: BroadcastChannel | null
 
-  constructor(private readonly name = 'gtdo') {}
+  /**
+   * Set by the store, to take the document another tab just wrote. It answers
+   * whether it took it: only an adopted revision counts as seen, because a tab
+   * that kept its own document has still not seen the other one's and must not
+   * be allowed to write over it.
+   */
+  onExternalWrite: ((raw: string, revision: number) => boolean) | null = null
+
+  constructor(private readonly name = 'gtdo') {
+    // Feature-detected. Without a channel the compare-and-swap still refuses a
+    // stale write; the tab just cannot learn about the other one's save.
+    this.channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(`${CHANNEL_PREFIX}${name}`)
+    if (this.channel !== null) this.channel.onmessage = (e: MessageEvent) => this.receive(e.data)
+  }
+
+  private receive(message: unknown): void {
+    const record = asRecord(message)
+    if (record === null || record.revision <= this.seenRevision) return
+    if (this.onExternalWrite?.(record.raw, record.revision) === true) this.seenRevision = record.revision
+  }
 
   private open(): Promise<IDBDatabase> {
     this.db ??= new Promise((resolve, reject) => {
@@ -77,8 +138,14 @@ export class IndexedDbAdapter implements StoragePort {
 
   async load(): Promise<LoadResult> {
     try {
-      const raw = await this.read<string>(STORES.data, DATA_KEY)
-      return raw === undefined ? { kind: 'absent' } : { kind: 'ok', raw }
+      const stored = await this.read<unknown>(STORES.data, DATA_KEY)
+      if (stored === undefined) return { kind: 'absent' }
+      const record = asRecord(stored)
+      // A record of some shape nobody recognises is not absent, and seeding
+      // over it would destroy whatever it is.
+      if (record === null) throw new Error('the stored record has an unrecognised shape')
+      this.seenRevision = record.revision
+      return { kind: 'ok', raw: record.raw }
     } catch (e) {
       // The database is there but unreadable — corrupt, blocked, or evicted
       // mid-session. NOT the same as absent, and the store must not overwrite.
@@ -87,8 +154,26 @@ export class IndexedDbAdapter implements StoragePort {
   }
 
   async persist(raw: string): Promise<void> {
-    await this.write(STORES.data, DATA_KEY, raw)
-    await this.write(STORES.meta, 'schemaVersion', DB_VERSION)
+    const db = await this.open()
+    const tx = db.transaction([STORES.data, STORES.meta], 'readwrite')
+    const data = tx.objectStore(STORES.data)
+    // The check and the write share one transaction. Read the revision in a
+    // separate one and another tab can land its save in between, which is
+    // exactly the race this is here to close.
+    const stored = asRecord(await promisify<unknown>(data.get(DATA_KEY) as IDBRequest<unknown>))
+    const storedRevision = stored?.revision ?? 0
+    if (storedRevision !== this.seenRevision) {
+      tx.abort()
+      throw new StaleWriteError(storedRevision, this.seenRevision)
+    }
+
+    const revision = storedRevision + 1
+    const record: DataRecord = { raw, revision }
+    data.put(record, DATA_KEY)
+    tx.objectStore(STORES.meta).put(DB_VERSION, 'schemaVersion')
+    await txDone(tx)
+    this.seenRevision = revision
+    this.channel?.postMessage(record)
   }
 
   async writeSnapshot(raw: string, at: Date): Promise<boolean> {

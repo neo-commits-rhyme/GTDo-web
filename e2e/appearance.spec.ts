@@ -128,7 +128,8 @@ test('the theme override beats the system preference in both directions', async 
     localStorage.setItem('gtdo.theme', 'light')
   })
   await page.reload()
-  // useTheme stamps data-theme on mount, so wait for the app before reading.
+  // The pre-paint script in index.html stamps data-theme before first paint, so
+  // this no longer has to wait for mount — it just costs nothing to keep.
   await expect(page.getByRole('heading', { name: 'Today', level: 1 })).toBeVisible()
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1)
   const forcedLight = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)

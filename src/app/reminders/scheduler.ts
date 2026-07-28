@@ -62,6 +62,16 @@ function defaultNotify(title: string, body: string): void {
   }
 }
 
+/**
+ * setTimeout's delay is an IDL long, so the browser truncates anything past
+ * this to signed 32-bit: a wait of 25 to 50 days comes out negative and fires
+ * the moment it is armed, and a longer one comes out positive but short — a
+ * yearly reminder fired a fortnight early. Since App re-arms every live
+ * reminder on load, that bogus notification came back on every single launch
+ * until the real date drew close. Long waits are walked in legs this size.
+ */
+const MAX_TIMER_MS = 2 ** 31 - 1
+
 export class TimerReminderSink implements ReminderSink {
   private timers = new Map<string, number>()
   private readonly deps: SchedulerDeps
@@ -79,10 +89,25 @@ export class TimerReminderSink implements ReminderSink {
     // Replace rather than stack: the store calls cancel-then-schedule, but a
     // caller that forgot would otherwise get two notifications.
     this.cancel(id)
-    const delay = at.getTime() - this.deps.now().getTime()
     // The store already refuses past reminders; this is the second guard,
     // because a negative delay in setTimeout fires immediately.
-    if (delay <= 0) return
+    if (at.getTime() - this.deps.now().getTime() <= 0) return
+    this.arm(id, title, at)
+  }
+
+  /** One leg of the wait. Re-entered on each wake until `at` actually arrives. */
+  private arm(id: string, title: string, at: Date): void {
+    const remaining = at.getTime() - this.deps.now().getTime()
+    if (remaining > MAX_TIMER_MS) {
+      const handle = this.deps.setTimer(() => {
+        // The clock is re-read rather than the legs counted off, so a machine
+        // that slept through one lands on the real date and not before it.
+        this.timers.delete(id)
+        this.arm(id, title, at)
+      }, MAX_TIMER_MS)
+      this.timers.set(id, handle)
+      return
+    }
     const handle = this.deps.setTimer(() => {
       this.timers.delete(id)
       try {
@@ -92,7 +117,7 @@ export class TimerReminderSink implements ReminderSink {
         // interrupted. Missing a notification is a garnish failing; an
         // uncaught throw is the app failing.
       }
-    }, delay)
+    }, Math.max(remaining, 0))
     this.timers.set(id, handle)
   }
 

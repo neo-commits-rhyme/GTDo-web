@@ -39,10 +39,26 @@ function str(s: string): string {
   return JSON.stringify(s).replace(/\//g, '\\/')
 }
 
+/** The instants the 20-character form can carry — exactly the span DATE_RE
+ *  accepts, so anything the decoder reads the encoder can write back. Outside
+ *  them toISOString() switches to the expanded '+020266-…' year. */
+const ISO_FLOOR = new Date('0000-01-01T00:00:00Z').getTime()
+const ISO_CEIL = new Date('9999-12-31T23:59:59Z').getTime()
+
 /** yyyy-MM-dd'T'HH:mm:ss'Z' — 20 characters, no fractional seconds, always Z.
- *  Sub-second precision is dropped, exactly as Foundation drops it. */
+ *  Sub-second precision is dropped, exactly as Foundation drops it.
+ *
+ *  Out-of-range instants are clamped rather than rejected: this runs inside
+ *  persist(), which has no path for a synchronous throw — one bad date would
+ *  fail every later save with saveError left null, and the alternative
+ *  (emitting the expanded form) writes a document the decoder quarantines on
+ *  the next launch, taking the whole file with it. An Invalid Date carries no
+ *  direction, but every way to make one here overshoots the top of the Date
+ *  range, so it clamps up with the rest. */
 function isoDate(d: Date): string {
-  return `${d.toISOString().slice(0, 19)}Z`
+  const t = d.getTime()
+  const clamped = Number.isNaN(t) ? ISO_CEIL : Math.min(Math.max(t, ISO_FLOOR), ISO_CEIL)
+  return `${new Date(clamped).toISOString().slice(0, 19)}Z`
 }
 
 function uuid(id: string): string {
@@ -130,7 +146,12 @@ type Raw = Record<string, unknown>
 
 const asString = (v: unknown) => (typeof v === 'string' ? v : null)
 const asBool = (v: unknown) => (typeof v === 'boolean' ? v : null)
-const asNumber = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+/** Every numeric field on the wire is a Swift Int — `order` on all three
+ *  entities and repeatRule.interval — and Int decoding throws on 1.5 as surely
+ *  as it throws on "1". Safe-integer, not merely integer: past 2^53 the double
+ *  no longer identifies a single Int, so accepting one would round the user's
+ *  value on the way back out. */
+const asInt = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : null)
 /** Any case accepted, hyphenated form required, normalised to uppercase. */
 const asUUID = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v.toUpperCase() : null)
 const asDate = (v: unknown) => {
@@ -145,7 +166,7 @@ function asRepeatRule(v: unknown): RepeatRule | null {
   const o = asObject(v)
   if (!o) return null
   const unit = asString(o['unit'])
-  const interval = asNumber(o['interval'])
+  const interval = asInt(o['interval'])
   if (unit === null || interval === null) return null
   if (!REPEAT_UNITS.includes(unit as RepeatUnit)) return null
   return { unit: unit as RepeatUnit, interval }
@@ -196,7 +217,7 @@ export function decodeAppData(raw: string): AppData {
       isCompleted: req(t, 'isCompleted', path, asBool),
       isTrashed: req(t, 'isTrashed', path, asBool),
       createdAt: req(t, 'createdAt', path, asDate),
-      order: req(t, 'order', path, asNumber),
+      order: req(t, 'order', path, asInt),
       dueDate: opt(t, 'dueDate', path, asDate),
       reminderDate: opt(t, 'reminderDate', path, asDate),
       completedAt: opt(t, 'completedAt', path, asDate),
@@ -213,7 +234,7 @@ export function decodeAppData(raw: string): AppData {
       id: req(l, 'id', path, asUUID),
       name: req(l, 'name', path, asString),
       isBuiltIn: req(l, 'isBuiltIn', path, asBool),
-      order: req(l, 'order', path, asNumber),
+      order: req(l, 'order', path, asInt),
       groupID: opt(l, 'groupID', path, asUUID),
       colorHex: opt(l, 'colorHex', path, asString),
       symbol: opt(l, 'symbol', path, asString),
@@ -228,7 +249,7 @@ export function decodeAppData(raw: string): AppData {
       id: req(g, 'id', path, asUUID),
       name: req(g, 'name', path, asString),
       isBuiltIn: req(g, 'isBuiltIn', path, asBool),
-      order: req(g, 'order', path, asNumber),
+      order: req(g, 'order', path, asInt),
     }
   })
 

@@ -49,6 +49,11 @@ function swipe(row: Element, dx: number, pointerType = 'touch') {
 const rowFor = async (title: string) =>
   (await screen.findByText(title)).closest('li') as HTMLElement
 
+const handleFor = async (title: string) => {
+  await screen.findByText(title)
+  return screen.getByRole('button', { name: `Reorder ${title}` })
+}
+
 beforeEach(() => { cleanup(); window.location.hash = '' })
 
 describe('Swipe', () => {
@@ -115,5 +120,67 @@ describe('Swipe', () => {
 
     swipe(await rowFor('done thing'), SWIPE_COMMIT_PX)
     expect(store.task(t.id)!.isCompleted).toBe(true) // un-complete is already one tap
+  })
+})
+
+/**
+ * On touch the handle takes implicit pointer capture, so every pointermove of a
+ * dnd-kit drag keeps bubbling through the <li> and reaches these handlers —
+ * dnd-kit stops no propagation. Dragging a row to the sidebar clears 72px
+ * horizontally every time, so the release trashed the task, and the move's undo
+ * entry then replaced the trash's: the bar read '1 task moved' and Undo did
+ * nothing.
+ */
+describe('Swipe never rides along with a drag', () => {
+  it('aTouchDragFromTheHandleNeitherTrashesNorCompletes', async () => {
+    const { store, undo } = await mount()
+    const t = store.addTask('buy milk', { kind: 'smart', view: 'today' })!
+    store.setSelectedTask(null)
+
+    swipe(await handleFor('buy milk'), -SWIPE_COMMIT_PX - 28) // a drop on the sidebar
+    expect(store.task(t.id)!.isTrashed).toBe(false)
+    expect(store.task(t.id)!.isCompleted).toBe(false)
+    expect(undo.pending).toBeNull() // nothing to replace the drag's own entry
+  })
+
+  it('aRightwardHandleDragDoesNotComplete', async () => {
+    // Reordering downwards drifts rightwards; that must not complete the task.
+    const { store, undo } = await mount()
+    const t = store.addTask('buy milk', { kind: 'smart', view: 'today' })!
+    store.setSelectedTask(null)
+
+    swipe(await handleFor('buy milk'), SWIPE_COMMIT_PX + 28)
+    expect(store.task(t.id)!.isCompleted).toBe(false)
+    expect(undo.pending).toBeNull()
+  })
+
+  it('aSwipeThatADragOvertakesCommitsNothing', async () => {
+    // The keyboard sensor can start a drag after the touch already armed the
+    // swipe, so the origin check alone is not enough.
+    const { store, undo } = await mount()
+    const t = store.addTask('buy milk', { kind: 'smart', view: 'today' })!
+    store.setSelectedTask(null)
+    const row = await rowFor('buy milk')
+
+    fireEvent(row, pointer('pointerdown', 0, 'touch'))
+    fireEvent.keyDown(await handleFor('buy milk'), { code: 'Space' })
+    fireEvent(row, pointer('pointermove', -SWIPE_COMMIT_PX - 28, 'touch'))
+    fireEvent(row, pointer('pointerup', -SWIPE_COMMIT_PX - 28, 'touch'))
+
+    expect(store.task(t.id)!.isTrashed).toBe(false)
+    expect(undo.pending).toBeNull()
+  })
+
+  it('theRowKeepsItsSortableTransformDuringAHandleDrag', async () => {
+    const { store } = await mount()
+    store.addTask('buy milk', { kind: 'smart', view: 'today' })
+    store.setSelectedTask(null)
+    const handle = await handleFor('buy milk')
+    const row = await rowFor('buy milk')
+
+    fireEvent(handle, pointer('pointerdown', 0, 'touch'))
+    fireEvent(handle, pointer('pointermove', -100, 'touch'))
+    // dnd-kit owns the row's position mid-drag; a swipe translate would fight it.
+    expect(row.style.transform).not.toContain('translateX')
   })
 })

@@ -139,6 +139,45 @@ export class StoreBase {
         this.notify()
       }
     }
+    // Optional on the port: an adapter with no shared backing has no siblings
+    // to hear from, and must still work.
+    if ('onExternalWrite' in deps.adapter) {
+      deps.adapter.onExternalWrite = (raw) => this.adoptExternalWrite(raw)
+    }
+  }
+
+  /**
+   * Take the document another tab just persisted, reporting whether we did.
+   *
+   * Safe only because every mutation persists immediately: with the queue idle,
+   * memory and disk agree and there is nothing of ours to lose. With a write
+   * outstanding there is, so we decline — and that write's compare-and-swap
+   * then fails loudly instead of deleting the other tab's work.
+   */
+  private adoptExternalWrite(raw: string): boolean {
+    // This tab is guarding bytes it could not read. Swapping its document
+    // underfoot changes nothing about that and only muddies what it shows.
+    if (this.refusingToOverwrite) return false
+    if (!this.queue.isIdle) return false
+    // A save that failed leaves the queue idle but this tab's changes off disk.
+    // Cleared by the next successful save, so this is a pause, not a latch.
+    if (this.saveError !== null) return false
+
+    let data: AppData
+    try {
+      data = decodeAppData(raw)
+    } catch {
+      // Not ours to quarantine — the tab that wrote them holds the same bytes —
+      // and adopting them would break a tab that is currently fine.
+      return false
+    }
+
+    this.data = data
+    // What is on disk now, so a later snapshot copies this rather than the
+    // document this tab loaded at launch — which no longer exists anywhere.
+    this.lastKnownGood = raw
+    this.notify()
+    return true
   }
 
   // MARK: - Subscription
@@ -213,7 +252,8 @@ export class StoreBase {
     return this.adapter.readSnapshot(id)
   }
 
-  /** Awaits the pending write. Tests and the export path use this. */
+  /** Awaits the pending write. Tests use this; the export path does not — it
+   *  encodes from memory and never waits for disk. */
   async flushWrites(): Promise<void> {
     await this.queue.flush()
   }

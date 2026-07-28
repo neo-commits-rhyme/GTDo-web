@@ -60,6 +60,29 @@ describe('WriteQueue', () => {
     expect(seen.map((s) => s === null)).toEqual([false, true])
   })
 
+  it('flushWaitsForTheNewestValueEvenWhenAnotherFlushClaimedIt', async () => {
+    // Three overlapping flushes. When the first write settles, the second
+    // resumes and claims the pending value; the third then resumes to find
+    // nothing pending and must NOT report done — that value is still in the
+    // air, and flush() is what the store's flushWrites() contract rests on.
+    const a = new MemoryAdapter()
+    const original = a.persist.bind(a)
+    vi.spyOn(a, 'persist').mockImplementation(async (raw) => {
+      await new Promise<void>((r) => { setTimeout(r, 0) })
+      return original(raw)
+    })
+    const q = new WriteQueue(a)
+    q.enqueue('first')
+    const writer = q.flush()
+    q.enqueue('second')
+    const claimant = q.flush()
+    const late = q.flush()
+
+    await late
+    expect(await a.load()).toEqual({ kind: 'ok', raw: 'second' })
+    await Promise.all([writer, claimant])
+  })
+
   it('aWriteEnqueuedDuringAnInFlightWriteStillLands', async () => {
     const a = new MemoryAdapter()
     let release: () => void = () => {}

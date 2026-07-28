@@ -36,6 +36,8 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
         type="button"
         className="row__handle"
         aria-label={`Reorder ${task.title}`}
+        // The gesture here belongs to the drag, not to the swipe: see useSwipe.
+        data-drag-handle=""
         {...attributes}
         {...listeners}
       >

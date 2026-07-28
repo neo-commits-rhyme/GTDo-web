@@ -45,6 +45,16 @@ export interface StoragePort {
    * Finder to recover from.
    */
   quarantine(raw: string, reason: string): Promise<void>
+  /**
+   * Set by the store to receive a document another tab just wrote, returning
+   * whether it took it. Only an adapter backed by shared storage can know this
+   * happened, so it is optional — the store works against the ones that cannot.
+   *
+   * Refusing matters as much as accepting: a tab that kept its own document has
+   * still not seen the other's, and its next save must fail the adapter's
+   * compare-and-swap rather than overwrite work it never read.
+   */
+  onExternalWrite?: ((raw: string, revision: number) => boolean) | null
 }
 
 /**

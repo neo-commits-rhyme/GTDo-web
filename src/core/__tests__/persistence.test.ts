@@ -159,4 +159,72 @@ describe('Persistence', () => {
   it('testCorruptJSONIsADecodeErrorNotASyntaxError', () => {
     expect(() => decodeAppData('{ not json')).toThrow(DecodeError)
   })
+
+  const atYear = (y: number): Date => {
+    const d = new Date(Date.UTC(2000, 0, 2, 3, 4, 5))
+    d.setUTCFullYear(y)
+    return d
+  }
+
+  it.each([1, 1969, 1970, 2026, 9998, 9999, 10_000, 10_001, 20_266, 275_000, 400_000])(
+    'testEveryEncodableDateSurvivesARoundTrip(%i)',
+    (year) => {
+      // toISOString() switches to the expanded '+020266-…' year outside
+      // 0000–9999, and the decoder rejects it — the document written on one
+      // launch is then quarantined on the next, taking every task with it.
+      const d = { ...seededAppData(), tasks: [{ ...bareTask(), dueDate: atYear(year) }] }
+      expect(() => decodeAppData(encodeAppData(d))).not.toThrow()
+    },
+  )
+
+  it('testClampingNeverRewritesADateTheDecoderAccepts', () => {
+    // The clamp window is the span DATE_RE matches, so every date that survives
+    // a decode also survives the re-encode byte for byte.
+    const parsed = JSON.parse(FIXTURE)
+    parsed.tasks[0].createdAt = '0000-01-01T00:00:00Z'
+    const out = encodeAppData(decodeAppData(JSON.stringify(parsed)))
+    expect(out).toContain('"createdAt" : "0000-01-01T00:00:00Z"')
+  })
+
+  it('testUnrepresentableDateClampsRatherThanThrowingOutOfEncode', () => {
+    // encodeAppData runs inside persist(), which has no path for a synchronous
+    // throw: saveError stays null and every later mutation fails identically.
+    const d = { ...seededAppData(), tasks: [{ ...bareTask(), dueDate: new Date(NaN) }] }
+    expect(() => encodeAppData(d)).not.toThrow()
+    expect(encodeAppData(d)).toContain('"dueDate" : "9999-12-31T23:59:59Z"')
+  })
+
+  it.each([1.5, -2.5, 1e21, Number.MAX_VALUE])('testNonIntegerTaskOrderThrows(%s)', (v) => {
+    // Swift's Int decode throws on all of these; accepting them here writes a
+    // file the macOS app moves aside as corrupt.
+    const parsed = JSON.parse(FIXTURE)
+    parsed.tasks[0].order = v
+    expect(() => decodeAppData(JSON.stringify(parsed))).toThrow(DecodeError)
+  })
+
+  it('testNonIntegerThrowsForEveryIntField', () => {
+    const decodes = (parsed: unknown) => () => decodeAppData(JSON.stringify(parsed))
+
+    const lists = JSON.parse(FIXTURE)
+    lists.lists[0].order = 1.5
+    expect(decodes(lists)).toThrow(DecodeError)
+
+    const groups = JSON.parse(FIXTURE)
+    groups.groups[0].order = 1.5
+    expect(decodes(groups)).toThrow(DecodeError)
+
+    const repeating = JSON.parse(FIXTURE)
+    const i = decodeAppData(FIXTURE).tasks.findIndex((t) => t.repeatRule !== null)
+    repeating.tasks[i].repeatRule.interval = 1.5
+    expect(decodes(repeating)).toThrow(DecodeError)
+  })
+
+  it('testNegativeAndZeroOrdersStillDecode', () => {
+    // Swift's Int is signed — tightening to "integer" must not become "counting
+    // number".
+    const parsed = JSON.parse(FIXTURE)
+    parsed.tasks[0].order = -3
+    parsed.lists[0].order = 0
+    expect(decodeAppData(JSON.stringify(parsed)).tasks[0]!.order).toBe(-3)
+  })
 })

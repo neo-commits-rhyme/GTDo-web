@@ -54,8 +54,8 @@ export function undoLabel(verb: string, count: number): string {
  *      deadline we had just restored.
  *   3. setDueDate before setRepeatRule — setDueDate(null) also nils the rule,
  *      and setRepeatRule on an undated task back-fills a deadline of today.
- *   4. toggleCompleted last, so nothing above runs against a task the store
- *      considers finished.
+ *   4. restoreFlags last, so nothing above runs against a task the store
+ *      considers finished or binned.
  */
 function restore(snapshot: TaskItem, store: AppStore): void {
   if (store.task(snapshot.id) === null) return // permanently deleted since
@@ -75,13 +75,7 @@ function restore(snapshot: TaskItem, store: AppStore): void {
   const sameRule = JSON.stringify(nowRule) === JSON.stringify(snapshot.repeatRule)
   if (!sameRule) store.setRepeatRule(snapshot.id, snapshot.repeatRule)
 
-  if (store.task(snapshot.id)!.isCompleted !== snapshot.isCompleted) {
-    store.toggleCompleted(snapshot.id)
-  }
-
-  if (snapshot.isTrashed && !store.task(snapshot.id)!.isTrashed) {
-    store.trashTask(snapshot.id)
-  }
+  restoreFlags(snapshot, store)
   // Reorder has no inverse of its own — moveIncompleteTasks redistributes
   // slots — so the slot is restored from the snapshot directly.
   if (store.task(snapshot.id)!.order !== snapshot.order) {
@@ -93,6 +87,42 @@ function restore(snapshot: TaskItem, store: AppStore): void {
   if (store.task(snapshot.id)!.title !== snapshot.title) {
     store.renameTask(snapshot.id, snapshot.title)
   }
+}
+
+/**
+ * Completion and trash come back as raw fields, because the store's mutators
+ * for them are not inverses. toggleCompleted re-stamps completedAt with now —
+ * resorting an old task to the top of Completed — and re-spawns a repeating
+ * task's next occurrence, which reverse() cannot delete because it was created
+ * during the undo, not during the mutation. trashTask likewise refreshes
+ * trashedAt, handing a nearly-purged item a fresh thirty days.
+ *
+ * The un-trash direction still goes through restoreTask above: moveTask is a
+ * no-op on a trashed task, so it has to happen before the move, and it already
+ * writes exactly what a non-trashed snapshot holds.
+ */
+function restoreFlags(snapshot: TaskItem, store: AppStore): void {
+  const task = store.data.tasks.find((t) => sameID(t.id, snapshot.id))
+  if (task === undefined) return
+  if (
+    task.isCompleted === snapshot.isCompleted &&
+    task.completedAt?.getTime() === snapshot.completedAt?.getTime() &&
+    task.isTrashed === snapshot.isTrashed &&
+    task.trashedAt?.getTime() === snapshot.trashedAt?.getTime()
+  ) return
+
+  task.isCompleted = snapshot.isCompleted
+  task.completedAt = snapshot.completedAt
+  task.isTrashed = snapshot.isTrashed
+  task.trashedAt = snapshot.trashedAt
+  // The two things trashTask/toggleCompleted do that the undo still wants:
+  // whether a reminder is live depends on both flags, and a re-binned task must
+  // not stay selected behind the detail pane.
+  if (task.isTrashed && store.selectedTaskID !== null && sameID(store.selectedTaskID, task.id)) {
+    store.setSelectedTask(null)
+  }
+  store.syncReminder(snapshot.id)
+  store.persist()
 }
 
 export function reverse(action: UndoAction, store: AppStore): void {

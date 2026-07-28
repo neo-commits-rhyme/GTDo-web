@@ -4,10 +4,54 @@ import {
   closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { undoLabel } from '../../core/undo'
-import { resolveDrop, type DropContext } from './resolve'
+import type { AppStore } from '../../core/store'
+import { undoLabel, type UndoCenter } from '../../core/undo'
+import { deadlinePromptWillOpen } from '../DeadlinePrompt'
+import { resolveDrop, type DropContext, type DropTarget } from './resolve'
 import { useStore, useStoreTick } from '../useStore'
 import { useUndoCenter } from '../undo/useUndo'
+
+/**
+ * What a drop *does*, split out of the handler for the same reason resolve.ts
+ * splits out what a drop *means*: the undo bookkeeping is the part that bites,
+ * and a call is far easier to test than a synthetic drag in a DOM that has no
+ * layout for dnd-kit to measure.
+ */
+export function applyDrop(
+  target: Exclude<DropTarget, null>, context: DropContext, store: AppStore, undo: UndoCenter,
+): void {
+  switch (target.kind) {
+    case 'reorder-task':
+      undo.perform(undoLabel('moved', 1), context.taskOrder, store, () => {
+        store.moveIncompleteTasks(target.listID, [target.from], target.to)
+      })
+      break
+
+    case 'move-task': {
+      // requestMove, never moveTask: dropping onto Next actions or Waiting
+      // for… must raise the deadline prompt rather than silently producing an
+      // undated task in a list whose whole point is that everything is dated.
+      const move = () => store.requestMove([target.taskID], target.listID)
+      // A drop that only raises the prompt has moved nothing yet, so there is
+      // nothing to undo; DeadlinePrompt records the move once a deadline is
+      // chosen. Offering a bar here made it read “1 task moved” over zero
+      // mutations, with an Undo that did nothing.
+      if (deadlinePromptWillOpen(store, target.taskID, target.listID)) move()
+      else undo.perform(undoLabel('moved', 1), [target.taskID], store, move)
+      break
+    }
+
+    case 'reorder-sidebar':
+      // Sidebar order is not task state, so there is nothing to snapshot.
+      if (target.scope === 'gtd') store.moveGTDEntries([target.from], target.to)
+      else store.moveUserEntries([target.from], target.to)
+      break
+
+    case 'reorder-in-group':
+      store.moveListsInGroup(target.groupID, [target.from], target.to)
+      break
+  }
+}
 
 /**
  * Drag, as an accelerator over paths that already work.
@@ -44,32 +88,7 @@ export function DragProvider({
     const target = resolveDrop(String(e.active.id), e.over === null ? null : String(e.over.id), context)
     if (target === null) return // a drop on nothing is a no-op, never a move to the end
 
-    switch (target.kind) {
-      case 'reorder-task':
-        undo.perform(undoLabel('moved', 1), context.taskOrder, store, () => {
-          store.moveIncompleteTasks(target.listID, [target.from], target.to)
-        })
-        break
-
-      case 'move-task':
-        // requestMove, never moveTask: dropping onto Next actions or Waiting
-        // for… must raise the deadline prompt rather than silently producing an
-        // undated task in a list whose whole point is that everything is dated.
-        undo.perform(undoLabel('moved', 1), [target.taskID], store, () => {
-          store.requestMove([target.taskID], target.listID)
-        })
-        break
-
-      case 'reorder-sidebar':
-        // Sidebar order is not task state, so there is nothing to snapshot.
-        if (target.scope === 'gtd') store.moveGTDEntries([target.from], target.to)
-        else store.moveUserEntries([target.from], target.to)
-        break
-
-      case 'reorder-in-group':
-        store.moveListsInGroup(target.groupID, [target.from], target.to)
-        break
-    }
+    applyDrop(target, context, store, undo)
   }
 
   const activeLabel = useMemo(() => {

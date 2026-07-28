@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SnapshotMeta } from '../core/ports'
 import { downloadExport, importText, restoreSnapshot } from './transfer'
 import { useStore, useStoreTick } from './useStore'
-import type { ThemeChoice } from './theme/useTheme'
+import { useResolvedScheme, type ThemeChoice } from './theme/useTheme'
 import { ACCENTS, type AccentID } from './theme/accents'
 import { readableInkOn } from './theme/contrast'
 import { completionSoundEnabled, setCompletionSoundEnabled } from './sound'
@@ -25,6 +25,7 @@ export function SettingsSheet({
 }) {
   useStoreTick()
   const store = useStore()
+  const scheme = useResolvedScheme(theme)
   const [autoEmpty, setAutoEmpty] = useState(autoEmptyTrashEnabled)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [sound, setSound] = useState(completionSoundEnabled)
@@ -70,6 +71,11 @@ export function SettingsSheet({
         <div className="swatches swatches--accent" role="radiogroup" aria-label="Accent colour">
           {ACCENTS.map((a) => {
             const selected = accent === a.id
+            // tokens.css resolves --accent per scheme, so a swatch fixed to the
+            // light value misrepresents the click: the deep-green Teal chip
+            // turned the app bright aqua, and the light values on dark paper
+            // sat as low as 1.52:1 — an invisible blob where Ink should be.
+            const shown = a[scheme]
             return (
               <button
                 key={a.id}
@@ -78,7 +84,7 @@ export function SettingsSheet({
                 aria-checked={selected}
                 aria-label={a.label}
                 className={`swatch${selected ? ' swatch--selected' : ''}`}
-                style={{ '--swatch': a.light, '--swatch-ink': readableInkOn(a.light) } as React.CSSProperties}
+                style={{ '--swatch': shown, '--swatch-ink': readableInkOn(shown) } as React.CSSProperties}
                 onClick={() => setAccent(a.id)}
               >
                 {selected && <span className="swatch__check" aria-hidden="true">✓</span>}

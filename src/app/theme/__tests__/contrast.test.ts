@@ -241,4 +241,41 @@ describe('Accent-on-accent surfaces', () => {
     expect(hover, '.review__choice:hover must exist').not.toBeNull()
     expect(hover![1], 'hover must not change the background tint').not.toContain('background')
   })
+
+  /**
+   * The key cap's real ground, composed the way the stylesheet stacks it: the
+   * rail's accent tint over paper, then whatever .review__key draws on top.
+   * Read from the CSS rather than restated, so changing either rule moves the
+   * number the test asserts.
+   */
+  function keyCapGround(css: string, accent: string, paper: string): string {
+    const railRule = /\.review__choice \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    const railPct = /background: color-mix\(in srgb, var\(--accent\) (\d+)%/.exec(railRule)
+    const rail = railPct === null ? paper : tint(accent, paper, Number(railPct[1]) / 100)
+
+    const capRule = /\.review__key \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    const capPct = /background: color-mix\(in srgb, currentColor (\d+)%/.exec(capRule)
+    if (capPct !== null) return tint(accent, rail, Number(capPct[1]) / 100)
+    // An opaque token replaces the stack instead of deepening it.
+    return /background: var\(--paper\)/.test(capRule) ? paper : rail
+  }
+
+  it('theShortcutKeyCapStaysReadableForEveryAccent', async () => {
+    // The cap is a 10px <kbd> INSIDE .review__choice, so its own tint composes
+    // with the rail's: 16% of currentColor over the rail's 10% landed at ~24%,
+    // which put amber — the DEFAULT accent — at 3.87:1. Identical defect to the
+    // 18% hover tint removed above, one level deeper in the stack. It is text,
+    // so the floor is the full 4.5:1.
+    const { readFileSync } = await import('node:fs')
+    const { ACCENTS } = await import('../accents')
+    const css = readFileSync('src/app/styles.css', 'utf8')
+    for (const accent of ACCENTS) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const ground = keyCapGround(css, accent[scheme], TOKENS.paper[scheme])
+        const ratio = contrastRatio(accent[scheme], ground)
+        expect(ratio, `${accent.label} ${scheme} on ${ground} = ${ratio.toFixed(2)}:1`)
+          .toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
 })

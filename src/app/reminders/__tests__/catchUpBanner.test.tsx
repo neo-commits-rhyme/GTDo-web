@@ -6,7 +6,9 @@ import { MemoryAdapter } from '../../../storage/memoryAdapter'
 import { BuiltIn } from '../../../core/models'
 import { StoreContext } from '../../useStore'
 import { CatchUpBanner } from '../CatchUpBanner'
-import { LAST_SEEN_KEY, readLastSeen } from '../lastSeen'
+import {
+  LAST_SEEN_KEY, readLastSeen, resetLastSeenSession, startLastSeenHeartbeat,
+} from '../lastSeen'
 
 const NOW = new Date(2026, 6, 28, 12, 0, 0)
 const at = (h: number) => new Date(2026, 6, 28, h, 0, 0)
@@ -24,7 +26,7 @@ async function mount(setup: (s: AppStore) => void) {
   return store
 }
 
-beforeEach(() => { cleanup(); localStorage.clear() })
+beforeEach(() => { cleanup(); localStorage.clear(); resetLastSeenSession() })
 
 describe('Catch-up banner', () => {
   it('namesWhatCameDueWhileClosed', async () => {
@@ -80,6 +82,39 @@ describe('Catch-up banner', () => {
     const banner = screen.getByRole('status', { name: 'Missed reminders' })
     expect(banner.textContent).toContain('8 reminders came due')
     expect(within(banner).getByText('and 3 more')).toBeTruthy()
+  })
+
+  it('staysQuietAboutAReminderThatFiredLiveDuringTheLastSession', async () => {
+    // The one that bit us: the stamp only ever moved on dismissal, so a
+    // reminder that fired as a live notification with the app open in front of
+    // the user was re-announced next launch as "missed while GTDo was closed"
+    // — and for anyone who had never dismissed a banner, on every launch after
+    // that too.
+    const previousSession = startLastSeenHeartbeat(() => at(11))
+    previousSession()
+    resetLastSeenSession()
+    const thisSession = startLastSeenHeartbeat(() => NOW)
+    await mount((s) => {
+      const t = s.addTask('the one that already rang', { kind: 'list', id: BuiltIn.inbox })!
+      s.setReminder(t.id, at(10))
+    })
+    expect(screen.queryByRole('status', { name: 'Missed reminders' })).toBeNull()
+    thisSession()
+  })
+
+  it('stillReportsWhatWasMissedEvenThoughOpeningTheAppAdvancesTheStamp', async () => {
+    // Order matters: the heartbeat writes the stamp on start, so the banner has
+    // to read the value latched before that write or it would erase its own
+    // input and never show anything again.
+    localStorage.setItem(LAST_SEEN_KEY, at(9).toISOString())
+    const stop = startLastSeenHeartbeat(() => NOW)
+    await mount((s) => {
+      const t = s.addTask('call the bank', { kind: 'list', id: BuiltIn.inbox })!
+      s.setReminder(t.id, at(10))
+    })
+    const banner = screen.getByRole('status', { name: 'Missed reminders' })
+    expect(banner.textContent).toContain('1 reminder came due while GTDo was closed')
+    stop()
   })
 
   it('needsNoNotificationPermission', async () => {

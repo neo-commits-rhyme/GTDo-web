@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { repeatDisplayName, type RepeatRule } from '../core/models'
+import { deadlinePromptWillOpen } from './DeadlinePrompt'
 import {
-  formatDateInput, formatDateTimeInput, parseDateInput, parseDateTimeInput,
+  formatDateInput, formatDateTimeInput, ISO_DATE_MAX, ISO_DATE_MIN,
+  parseDateInput, parseDateTimeInput,
 } from './format'
 import { useStore, useStoreTick } from './useStore'
 import { useUndoCenter } from './undo/useUndo'
@@ -55,10 +57,12 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
     // prompt rather than silently accepting an undated task.
     //
     // Undoable, because moving into Someday strips the deadline and the repeat
-    // rule — the exact case snapshots exist for.
-    undo.perform(undoLabel('moved', 1), [task.id], store, () => {
-      store.requestMove([task.id], listID)
-    })
+    // rule — the exact case snapshots exist for. Except when the target only
+    // raises the prompt: nothing has moved yet, and DeadlinePrompt records the
+    // move once a deadline is chosen.
+    const go = () => store.requestMove([task.id], listID)
+    if (deadlinePromptWillOpen(store, task.id, listID)) go()
+    else undo.perform(undoLabel('moved', 1), [task.id], store, go)
   }
 
   return (
@@ -81,6 +85,8 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
         <span>Deadline</span>
         <input
           type="date"
+          min={ISO_DATE_MIN}
+          max={ISO_DATE_MAX}
           value={formatDateInput(task.dueDate)}
           onChange={(e) => store.setDueDate(task.id, parseDateInput(e.target.value))}
         />

@@ -233,12 +233,17 @@ body {
 .review__choice--destructive:hover { border-color: var(--overdue); }
 .review__choice-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .review__icon { flex: none; }
-/* Absolute, so the key cap never pushes the centred title off-centre. */
+/* Absolute, so the key cap never pushes the centred title off-centre.
+
+   Punched back to paper rather than tinted: the cap sits INSIDE the choice, so
+   its own 16% of currentColor composed with the rail's 10% to ~24%, dropping
+   amber — the default accent — to 3.87:1. Same defect as the 18% hover tint
+   that was removed, one level further down the stack. */
 .review__key {
   position: absolute; right: 10px;
   font: 10px/1 var(--mono); font-variant-numeric: tabular-nums;
   padding: 3px 7px; border-radius: 4px;
-  background: color-mix(in srgb, currentColor 16%, transparent); color: inherit;
+  background: var(--paper); color: inherit;
 }
 .review__back {
   font: inherit; cursor: pointer; background: none; border: 0;

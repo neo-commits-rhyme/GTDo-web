@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppStore } from './core/store'
 import { IndexedDbAdapter, requestPersistentStorage } from './storage/indexedDbAdapter'
 import { TimerReminderSink } from './app/reminders/scheduler'
+import { startLastSeenHeartbeat } from './app/reminders/lastSeen'
 import { RootShell } from './app/RootShell'
 import { StoreContext } from './app/useStore'
 import { UndoContext } from './app/undo/useUndo'
@@ -18,6 +19,7 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false
+    let stopHeartbeat: (() => void) | null = null
     void AppStore.create({
       adapter: new IndexedDbAdapter(),
       now: () => new Date(),
@@ -35,9 +37,12 @@ export function App() {
       if (autoEmptyTrashEnabled()) created.purgeTrash(30)
       // Fire-and-forget: Firefox never settles this promise (assumptions §3).
       requestPersistentStorage()
+      // Before the tree renders, so the catch-up banner mounts against the
+      // stamp as it stood at launch rather than the one this call writes.
+      stopHeartbeat = startLastSeenHeartbeat()
       setStore(created)
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; stopHeartbeat?.() }
   }, [])
 
   if (store === null) return <p className="list__empty">Loading…</p>

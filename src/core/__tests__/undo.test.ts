@@ -7,6 +7,9 @@ import { UndoCenter, undoLabel, UNDO_WINDOW_MS } from '../undo'
 const NOW = new Date(2026, 6, 28, 9, 0, 0)
 const store = async () =>
   AppStore.create({ adapter: new MemoryAdapter(), now: () => NOW, scheduler: (_m, f) => f() })
+/** A store whose clock the test can advance — "days later, undo" needs two nows. */
+const movingStore = async (clock: () => Date) =>
+  AppStore.create({ adapter: new MemoryAdapter(), now: clock, scheduler: (_m, f) => f() })
 /** Never fires, so a pending action stays pending for the assertions. */
 const held = () => new UndoCenter(() => {})
 
@@ -89,6 +92,72 @@ describe('Undo', () => {
     expect(s.data.tasks.length).toBe(1)
     expect(s.task(t.id)!.isCompleted).toBe(false)
     expect(s.task(t.id)!.repeatRule).toEqual({ unit: 'week', interval: 1 })
+  })
+
+  it('undoingAnUnCompleteDoesNotSpawnAnExtraOccurrence', async () => {
+    // The other direction of the same bug: re-completing through
+    // toggleCompleted spawns a SECOND occurrence, and reverse() only deletes
+    // the ids the original mutation created, so the new one survives forever.
+    const s = await store()
+    const t = s.addTask('water plants', { kind: 'list', id: BuiltIn.notes })!
+    s.setDueDate(t.id, new Date(2026, 6, 20))
+    s.setRepeatRule(t.id, { unit: 'week', interval: 1 })
+    s.toggleCompleted(t.id)
+    expect(s.data.tasks.length).toBe(2) // the original plus next Monday's
+
+    const undo = held()
+    undo.perform('reopened', [t.id], s, () => s.toggleCompleted(t.id))
+    undo.undo(s)
+    expect(s.data.tasks.length).toBe(2)
+    expect(s.task(t.id)!.isCompleted).toBe(true)
+  })
+
+  it('undoingAnUnCompleteRestoresTheOriginalCompletionDate', async () => {
+    // completedAt is what Completed sorts by, so a re-stamped date silently
+    // moves an eight-day-old task to the top of the list.
+    let now = new Date(2026, 6, 20, 9, 0, 0)
+    const s = await movingStore(() => now)
+    const t = s.addTask('file the receipts', { kind: 'list', id: BuiltIn.notes })!
+    s.toggleCompleted(t.id)
+    const completedAt = s.task(t.id)!.completedAt!
+
+    now = new Date(2026, 6, 28, 9, 0, 0)
+    const undo = held()
+    undo.perform('reopened', [t.id], s, () => s.toggleCompleted(t.id))
+    undo.undo(s)
+    expect(s.task(t.id)!.completedAt!.getTime()).toBe(completedAt.getTime())
+  })
+
+  it('undoingARestoreDoesNotRestartThePurgeClock', async () => {
+    // trashTask deliberately refreshes trashedAt, so routing undo through it
+    // hands a week-old item a brand new thirty days in the Trash.
+    let now = new Date(2026, 6, 20, 9, 0, 0)
+    const s = await movingStore(() => now)
+    const t = s.addTask('old receipt', { kind: 'list', id: BuiltIn.notes })!
+    s.trashTask(t.id)
+    const trashedAt = s.task(t.id)!.trashedAt!
+
+    now = new Date(2026, 6, 28, 9, 0, 0)
+    const undo = held()
+    undo.perform('restored', [t.id], s, () => s.restoreTask(t.id))
+    undo.undo(s)
+    expect(s.task(t.id)!.isTrashed).toBe(true)
+    expect(s.task(t.id)!.trashedAt!.getTime()).toBe(trashedAt.getTime())
+    s.purgeTrash(7)
+    expect(s.task(t.id)).toBeNull() // still eight days old, so still due to go
+  })
+
+  it('undoingARestoreDropsTheSelectionTheWayTrashingDoes', async () => {
+    // Undo must land on the state trashing produces, and trashTask clears the
+    // selection — otherwise the detail pane keeps showing a binned task.
+    const s = await store()
+    const t = s.addTask('old receipt', { kind: 'list', id: BuiltIn.notes })!
+    s.trashTask(t.id)
+    s.setSelectedTask(t.id)
+    const undo = held()
+    undo.perform('restored', [t.id], s, () => s.restoreTask(t.id))
+    undo.undo(s)
+    expect(s.selectedTaskID).toBeNull()
   })
 
   it('restoresTheTitleAndNote', async () => {

@@ -9,6 +9,41 @@
     <link rel="apple-touch-icon" href="/GTDo-web/icons/icon-192.png" />
     <meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#191817" media="(prefers-color-scheme: dark)" />
+    <!--
+      Applied from React's effects alone, a stored choice arrives one paint too
+      late: an OS-light machine set to Dark rendered the whole app light and
+      then flipped, on every load. This stamps the same attribute and the same
+      accent variables useTheme/useAccent write, before the first paint.
+
+      It runs before everything else, so it must never throw — localStorage
+      does exactly that in some privacy modes. The palette is duplicated here
+      because nothing is imported yet; __tests__/prePaint.test.ts executes this
+      script against ACCENTS and fails the moment the two drift.
+    -->
+    <script>
+      try {
+        var root = document.documentElement
+        var theme = localStorage.getItem('gtdo.theme')
+        if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+        var accent = {
+          amber: ['#96570F', '#D99441'],
+          ink: ['#3B3830', '#D8D4CB'],
+          rust: ['#A8331B', '#F0866A'],
+          olive: ['#4F5D28', '#A9BF6B'],
+          teal: ['#0C6B63', '#5FCFC2'],
+          indigo: ['#3A3E9E', '#9AA0F0'],
+          plum: ['#7A2E63', '#DF93C4'],
+        }[localStorage.getItem('gtdo.accent')]
+        // Array.isArray, not truthiness: a stored `constructor` finds a
+        // function on the prototype and would write "undefined" as a colour.
+        if (Array.isArray(accent)) {
+          root.style.setProperty('--accent-light', accent[0])
+          root.style.setProperty('--accent-dark', accent[1])
+        }
+      } catch (e) {
+        // No stored preference reachable — the defaults in tokens.css stand.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

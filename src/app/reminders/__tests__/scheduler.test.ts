@@ -99,6 +99,85 @@ describe('TimerReminderSink', () => {
   })
 })
 
+/**
+ * A fake timer table whose clock advances by the leg it just ran, so a wait
+ * walked in several legs converges the way real time does.
+ */
+function chainHarness() {
+  let clock = NOW.getTime()
+  const timers = new Map<number, { fn: () => void; ms: number }>()
+  let next = 1
+  const legs: number[] = []
+  const notified: { title: string; body: string }[] = []
+  const sink = new TimerReminderSink({
+    now: () => new Date(clock),
+    setTimer: (fn, ms) => { legs.push(ms); const h = next++; timers.set(h, { fn, ms }); return h },
+    clearTimer: (h) => { timers.delete(h) },
+    notify: (title, body) => { notified.push({ title, body }) },
+  })
+  return {
+    sink, notified, legs, timers,
+    /** Runs the one armed timer, moving the clock forward by its own delay. */
+    runLeg: () => {
+      const entry = [...timers.entries()][0]
+      if (entry === undefined) return false
+      timers.delete(entry[0])
+      clock += entry[1].ms
+      entry[1].fn()
+      return true
+    },
+  }
+}
+
+const INT32_MAX = 2 ** 31 - 1
+const inDays = (n: number) => new Date(NOW.getTime() + n * 86_400_000)
+
+describe('Waits longer than a browser timer can hold', () => {
+  it('neverHandsTheBrowserADelayItCannotRepresent', () => {
+    // setTimeout's delay is an IDL long: a delay past ~24.8 days wraps to a
+    // negative (fires the instant the app opens) or to a smaller positive
+    // (fires days early). Both used to happen, on every launch, because the
+    // app re-arms every reminder on load.
+    const h = chainHarness()
+    h.sink.schedule('a', 'annual review', inDays(365))
+    while (h.runLeg()) { /* walk the whole chain */ }
+    expect(h.legs.length).toBeGreaterThan(1)
+    expect(Math.max(...h.legs)).toBeLessThanOrEqual(INT32_MAX)
+  })
+
+  it('firesOnlyOnceTheRealDateArrives', () => {
+    const h = chainHarness()
+    h.sink.schedule('a', 'renew passport', inDays(60))
+    h.runLeg()
+    expect(h.notified).toEqual([])
+    while (h.runLeg()) { /* walk the whole chain */ }
+    expect(h.notified).toEqual([{ title: 'GTDo', body: 'renew passport' }])
+    expect(h.sink.pendingIDs).toEqual([])
+  })
+
+  it('cancelStopsAChainedTimerPartWayThrough', () => {
+    const h = chainHarness()
+    h.sink.schedule('a', 'renew passport', inDays(60))
+    h.runLeg()
+    expect(h.sink.pendingIDs).toEqual(['a'])
+    h.sink.cancel('a')
+    expect(h.sink.pendingIDs).toEqual([])
+    while (h.runLeg()) { /* nothing should be left to run */ }
+    expect(h.notified).toEqual([])
+  })
+
+  it('doesNotFireImmediatelyThroughTheRealBrowserTimer', async () => {
+    // Every other test here injects setTimer, so the platform's own truncation
+    // of an over-long delay was never exercised — which is how this shipped.
+    const notified: string[] = []
+    const sink = new TimerReminderSink({ notify: (_t, body) => { notified.push(body) } })
+    sink.schedule('a', 'renew passport', new Date(Date.now() + 60 * 86_400_000))
+    await new Promise((resolve) => { setTimeout(resolve, 20) })
+    expect(notified).toEqual([])
+    sink.cancelAll()
+  })
+})
+
 describe('Permission', () => {
   it('reportsUnsupportedWhereNotificationDoesNotExist', () => {
     vi.stubGlobal('Notification', undefined)

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { formatDateInput, parseDateInput } from '../format'
+import { formatDateInput, ISO_DATE_MAX, ISO_DATE_MIN, parseDateInput } from '../format'
 import { ReviewIcon } from './ReviewIcon'
 import { useReview } from './useReview'
 
@@ -81,6 +81,8 @@ export function ReviewSheet({ onClose }: { onClose: () => void }) {
                   <span>Deadline</span>
                   <input
                     type="date"
+                    min={ISO_DATE_MIN}
+                    max={ISO_DATE_MAX}
                     value={formatDateInput(deadline)}
                     onChange={(e) => {
                       const parsed = parseDateInput(e.target.value)
