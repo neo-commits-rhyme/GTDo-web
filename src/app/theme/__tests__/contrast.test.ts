@@ -137,3 +137,37 @@ describe('Swatch legibility', () => {
     expect(contrastRatio('#FFFFFF', '#FFCC00')).toBeLessThan(2)
   })
 })
+
+describe('Accent-on-accent surfaces', () => {
+  /** color-mix(in srgb, fg pct%, transparent) composited over bg. */
+  function tint(fg: string, bg: string, pct: number): string {
+    const parse = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+    const [fr, fg2, fb] = parse(fg)
+    const [br, bg2, bb] = parse(bg)
+    const c = (f: number, b: number) => Math.round(f * pct + b * (1 - pct))
+    return `#${[c(fr!, br!), c(fg2!, bg2!), c(fb!, bb!)]
+      .map((n) => n.toString(16).padStart(2, '0'))
+      .join('')}`
+  }
+
+  it('reviewChoicesStayReadableForEveryAccent', async () => {
+    // The rail draws accent text on a 10% tint of the same accent. Hover used
+    // to deepen that to 18%, which put amber — the DEFAULT accent — at 4.24:1.
+    // Hover is now a ring, so the only tint to check is the resting one.
+    const { ACCENTS } = await import('../accents')
+    for (const accent of ACCENTS) {
+      const light = contrastRatio(accent.light, tint(accent.light, TOKENS.paper.light, 0.1))
+      const dark = contrastRatio(accent.dark, tint(accent.dark, TOKENS.paper.dark, 0.1))
+      expect(light, `${accent.label} light = ${light.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+      expect(dark, `${accent.label} dark = ${dark.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('hoverDoesNotDeepenTheTint', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/app/styles.css', 'utf8')
+    const hover = /\.review__choice:hover \{([^}]*)\}/.exec(css)
+    expect(hover, '.review__choice:hover must exist').not.toBeNull()
+    expect(hover![1], 'hover must not change the background tint').not.toContain('background')
+  })
+})

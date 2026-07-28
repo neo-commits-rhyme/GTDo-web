@@ -216,11 +216,11 @@ body {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
 }
-.review__choice:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.review__choice:hover { border-color: var(--accent); }
 .review__choice--destructive {
   background: color-mix(in srgb, var(--overdue) 10%, transparent); color: var(--overdue);
 }
-.review__choice--destructive:hover { background: color-mix(in srgb, var(--overdue) 18%, transparent); }
+.review__choice--destructive:hover { border-color: var(--overdue); }
 .review__choice-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .review__icon { flex: none; }
 /* Absolute, so the key cap never pushes the centred title off-centre. */

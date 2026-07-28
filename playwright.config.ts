@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORT = 5173
+// Deliberately not 5173: a dev server on the usual port would be reused, and
+// the dev server does not serve the generated sw.js — so the offline tests
+// would silently pass against the wrong thing, which is worse than failing.
+const PORT = 5199
 const BASE = `http://localhost:${PORT}/GTDo-web/`
 
 export default defineConfig({
@@ -17,9 +20,9 @@ export default defineConfig({
   webServer: {
     // Preview, not dev: the service worker only exists after a build, and the
     // offline test is meaningless without it.
-    command: 'npm run build && npx vite preview --port 5173 --strictPort',
+    command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
     url: BASE,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 })

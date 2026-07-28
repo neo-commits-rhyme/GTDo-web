@@ -32,7 +32,10 @@ export function downloadExport(store: AppStore): void {
 
 export class ImportError extends Error {
   constructor(readonly cause: Error) {
-    super(`That file could not be read as GTDo data: ${cause.message}`)
+    // The underlying message is a JSON parser's ("Expected property name or
+    // '}' at position 2"), which tells a user nothing and reads like a crash.
+    // It is kept on `cause` for anyone debugging.
+    super('That file could not be read as GTDo data. It may be damaged, or from a different app.')
     this.name = 'ImportError'
   }
 }
