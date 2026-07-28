@@ -9,6 +9,15 @@ name: drift
 # The GTDo ref is pinned deliberately. Bump it by hand when the model changes,
 # never automatically — an automatic bump would hide exactly the change this
 # job exists to catch.
+#
+# GTDo is a PRIVATE repository, and a public repo's GITHUB_TOKEN cannot read it.
+# The job therefore needs a fine-grained personal access token with read access
+# to neo-commits-rhyme/GTDo, stored as the repository secret GTDO_READ_TOKEN:
+#
+#   gh secret set GTDO_READ_TOKEN --repo neo-commits-rhyme/GTDo-web
+#
+# Without that secret the interop check is SKIPPED and the run says so, rather
+# than reporting a green tick it has not earned.
 
 on:
   push:
@@ -18,20 +27,42 @@ on:
 jobs:
   interop:
     runs-on: ubuntu-latest
-    container: swift:6
+    container: swift:6.3
     steps:
       - uses: actions/checkout@v4
+
+      - name: Is the private-repo token available?
+        id: token
+        env:
+          GTDO_READ_TOKEN: ${{ secrets.GTDO_READ_TOKEN }}
+        run: |
+          if [ -n "$GTDO_READ_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Interop check skipped::GTDO_READ_TOKEN is not set, so the macOS models could not be fetched. The TypeScript encoder was NOT verified against Swift in this run."
+          fi
+
       - name: Check out the macOS app at a pinned commit
+        if: steps.token.outputs.available == 'true'
         uses: actions/checkout@v4
         with:
           repository: neo-commits-rhyme/GTDo
           ref: a1cbe0f7f99c1ba9fd84aff631ea5f22956b0221
+          token: ${{ secrets.GTDO_READ_TOKEN }}
           path: gtdo-swift
+
       - uses: actions/setup-node@v4
+        if: steps.token.outputs.available == 'true'
         with:
           node-version: 22
-      - run: npm ci
+
+      - name: Install dependencies
+        if: steps.token.outputs.available == 'true'
+        run: npm ci
+
       - name: TypeScript output must decode with the macOS app's own models
+        if: steps.token.outputs.available == 'true'
         run: |
           cat gtdo-swift/Sources/GTDo/Models/Models.swift scripts/drift-main.swift > /tmp/check.swift
           npx tsx scripts/emit-fixture.ts | swift /tmp/check.swift

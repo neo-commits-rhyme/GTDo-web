@@ -34,7 +34,11 @@ Drop it at `~/Library/Application Support/GTDo/data.json` and it opens there.
 Settings → **Import data.json** goes the other way.
 
 The format compatibility is not a hope — CI decodes this app's output using the
-macOS app's own `Models.swift` on every push and fails if the two ever disagree.
+macOS app's own `Models.swift` and fails if the two ever disagree. That check
+needs read access to the (private) GTDo repository, so it runs only when the
+`GTDO_READ_TOKEN` repository secret is set, and prints a warning saying it was
+skipped when it is not. It has been verified locally: 42 tasks, 9 lists,
+byte-identical in both directions.
 
 ## Layout
 
