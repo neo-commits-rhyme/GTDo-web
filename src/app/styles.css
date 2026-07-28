@@ -178,6 +178,26 @@ body {
 .row + .row { border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
 .row--selected { background: var(--selection); border-radius: 5px; }
 
+.row__handle {
+  background: none; border: 0; cursor: grab; padding: 5px 2px;
+  color: var(--ink-tertiary); line-height: 1; font-size: 11px;
+  opacity: 0; transition: opacity var(--spring-standard);
+  touch-action: none;
+}
+.row:hover .row__handle, .row__handle:focus-visible { opacity: 1; }
+.row__handle:active { cursor: grabbing; }
+.row--dragging { opacity: .4; }
+.drag-overlay {
+  padding: 5px 10px; border-radius: 6px; font: 13px/1.35 var(--sans);
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--rule); box-shadow: var(--shadow-dialog);
+}
+/* Never colour alone: the drop target also gains a ring. */
+.nav__item--over {
+  background: var(--selection);
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+
 .row__circle {
   background: none; border: 0; cursor: pointer; padding: 5px;
   color: var(--ink-tertiary); line-height: 1; font-size: 14px;

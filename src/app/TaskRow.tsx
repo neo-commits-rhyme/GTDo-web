@@ -1,4 +1,7 @@
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { TaskItem } from '../core/models'
+import { dragID } from './dnd/resolve'
 import { deadlineToken } from './format'
 import { playCompletionSound } from './sound'
 import { useStore } from './useStore'
@@ -12,9 +15,26 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
   const store = useStore()
   const completed = store.rendersCompleted(task)
   const token = deadlineToken(task.dueDate, store.today, completed)
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: dragID.task(task.id) })
 
   return (
-    <li className={`row${selected ? ' row--selected' : ''}${completed ? ' row--done' : ''}`}>
+    <li
+      ref={setNodeRef}
+      className={`row${selected ? ' row--selected' : ''}${completed ? ' row--done' : ''}${isDragging ? ' row--dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      {/* A dedicated handle rather than a draggable row: the row body opens the
+          detail pane and the circle completes, and both must stay clickable. */}
+      <button
+        type="button"
+        className="row__handle"
+        aria-label={`Reorder ${task.title}`}
+        {...attributes}
+        {...listeners}
+      >
+        <span aria-hidden="true">⠿</span>
+      </button>
       <button
         type="button"
         className="row__circle"

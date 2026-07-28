@@ -14,6 +14,8 @@ import { useShortcuts } from './useShortcuts'
 import { useStore, useStoreTick } from './useStore'
 import { useTheme } from './theme/useTheme'
 import { useAccent } from './theme/useAccent'
+import { DragProvider } from './dnd/DragProvider'
+import type { DropContext } from './dnd/resolve'
 import { UndoBar } from './undo/UndoBar'
 import { useUndoCenter } from './undo/useUndo'
 
@@ -50,6 +52,19 @@ export function RootShell() {
     : null
   const closeDetail = () => store.setSelectedTask(null)
 
+  // What a drop can mean right now: which tasks are on screen, which list they
+  // belong to, and the current sidebar orders.
+  const listID = store.selection !== null && store.selection.kind === 'list' ? store.selection.id : null
+  const dropContext: DropContext = {
+    taskOrder: listID === null ? [] : store.incompleteTasks(listID).map((t) => t.id),
+    listID,
+    gtdOrder: store.gtdSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),
+    userOrder: store.userSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),
+    groupMembers: Object.fromEntries(
+      store.data.groups.map((g) => [g.id, store.listsInGroup(g.id).map((l) => l.id)]),
+    ),
+  }
+
   const goto = (item: SidebarItem) => {
     navigate(item)
     setNarrowPane('tasks')
@@ -59,6 +74,7 @@ export function RootShell() {
   const detailIsOverlay = breakpoint !== 'wide'
 
   return (
+    <DragProvider context={dropContext}>
     <div className={`shell shell--${breakpoint}${detailID !== null && breakpoint === 'wide' ? ' shell--detail' : ''}`}>
       <SaveFailureBanner />
       <LiveRegion />
@@ -107,5 +123,6 @@ export function RootShell() {
         />
       )}
     </div>
+    </DragProvider>
   )
 }

@@ -1,4 +1,6 @@
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CALENDAR_BUCKETS, type SidebarItem, type TaskItem } from '../core/models'
+import { dragID } from './dnd/resolve'
 import { AddBar } from './AddBar'
 import { TaskRow } from './TaskRow'
 import { useStore, useStoreTick } from './useStore'
@@ -87,10 +89,12 @@ export function TaskList() {
 function Rows({ tasks }: { tasks: TaskItem[] }) {
   const store = useStore()
   return (
-    <ul className="rows">
-      {tasks.map((t) => (
-        <TaskRow key={t.id} task={t} selected={store.selectedTaskID === t.id} />
-      ))}
-    </ul>
+    <SortableContext items={tasks.map((t) => dragID.task(t.id))} strategy={verticalListSortingStrategy}>
+      <ul className="rows">
+        {tasks.map((t) => (
+          <TaskRow key={t.id} task={t} selected={store.selectedTaskID === t.id} />
+        ))}
+      </ul>
+    </SortableContext>
   )
 }

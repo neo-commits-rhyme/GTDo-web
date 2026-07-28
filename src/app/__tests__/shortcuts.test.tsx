@@ -119,12 +119,15 @@ describe('Accessibility', () => {
     // Both the circle and the row body are real buttons, not click handlers on
     // a div, so tab order reaches them.
     expect(await screen.findByRole('checkbox', { name: /reachable/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /reachable/ })).toBeTruthy()
+    // The row body opens the detail; the handle reorders. Both are real
+    // buttons, so tab order reaches each.
+    expect(screen.getByRole('button', { name: 'reachable' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reorder reachable' })).toBeTruthy()
   })
 
   it('theCompletionHoldReleaseIsAnnouncedPolitely', async () => {
     await mount()
-    const region = screen.getByRole('status')
+    const region = screen.getByRole('status', { name: 'List changes' })
     expect(region.getAttribute('aria-live')).toBe('polite')
   })
 

@@ -198,7 +198,7 @@ describe('Detail pane', () => {
     store.addTask('buy milk', { kind: 'smart', view: 'today' })
     store.setSelectedTask(null)
 
-    await user.click(await screen.findByRole('button', { name: /buy milk/ }))
+    await user.click(await screen.findByRole('button', { name: 'buy milk' }))
     expect(screen.getByRole('complementary', { name: 'Task detail' })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Close detail' }))

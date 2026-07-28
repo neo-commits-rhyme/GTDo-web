@@ -1,5 +1,7 @@
 import { SMART_VIEWS, sidebarItemsEqual, type SidebarItem, type SmartView } from '../core/models'
 import { useState } from 'react'
+import { useDroppable } from '@dnd-kit/core'
+import { dragID } from './dnd/resolve'
 import { ListIcon } from './ListIcon'
 import { ListEditor } from './ListEditor'
 import { useStore, useStoreTick } from './useStore'
@@ -161,11 +163,15 @@ function ListRow({
   onEdit: () => void
   count: number
 }) {
+  // Every stored list is a drop target: dragging a task onto one files it.
+  const { setNodeRef, isOver } = useDroppable({ id: dragID.listDrop(list.id) })
+
   return (
     <>
       <button
+        ref={setNodeRef}
         type="button"
-        className={`nav__item${selected ? ' nav__item--selected' : ''}`}
+        className={`nav__item${selected ? ' nav__item--selected' : ''}${isOver ? ' nav__item--over' : ''}`}
         aria-current={selected ? 'page' : undefined}
         onClick={onNavigate}
       >

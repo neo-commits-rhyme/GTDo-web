@@ -76,6 +76,11 @@ function restore(snapshot: TaskItem, store: AppStore): void {
   if (snapshot.isTrashed && !store.task(snapshot.id)!.isTrashed) {
     store.trashTask(snapshot.id)
   }
+  // Reorder has no inverse of its own — moveIncompleteTasks redistributes
+  // slots — so the slot is restored from the snapshot directly.
+  if (store.task(snapshot.id)!.order !== snapshot.order) {
+    store.setTaskOrder(snapshot.id, snapshot.order)
+  }
   if (store.task(snapshot.id)!.note !== snapshot.note) {
     store.setNote(snapshot.id, snapshot.note)
   }

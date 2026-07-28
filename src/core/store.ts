@@ -130,6 +130,15 @@ export class AppStore extends StoreBase {
     this.persist()
   }
 
+  /**
+   * Puts a task back at a specific slot. Exists for undo: a reorder is
+   * expressed through moveIncompleteTasks, which has no inverse, so restoring
+   * a snapshot needs to write the slot directly.
+   */
+  setTaskOrder(id: string, order: number): void {
+    this.withTask(id, (t) => { t.order = order })
+  }
+
   // MARK: - Completion
 
   toggleCompleted(id: string): void {
