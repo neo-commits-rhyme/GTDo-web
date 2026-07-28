@@ -15,10 +15,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
       - run: npx eslint .
-      - run: npx vitest run
+      # Before the tests: some of them assert on generated output (the service
+      # worker and its precache list), so a suite that runs first is asserting
+      # on whatever dist happened to be lying around.
       - run: npm run build
+      - run: npx vitest run
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: End-to-end smoke
