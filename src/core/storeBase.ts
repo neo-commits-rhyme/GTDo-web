@@ -29,6 +29,12 @@ export type StoreDeps = {
   scheduler: (delayMs: number, fn: () => void) => void
   /** Optional: without one, reminders are stored but never scheduled. */
   reminders?: ReminderPort
+  /**
+   * Optional: whether an undo is still on offer. The store cannot ask
+   * UndoCenter itself — core layering runs store → undo, not back — so the app
+   * wires its centre in here. Without one, adoption assumes no undo is pending.
+   */
+  hasPendingUndo?: () => boolean
 }
 
 
@@ -101,6 +107,7 @@ export class StoreBase {
   readonly now: () => Date
   readonly scheduler: (delayMs: number, fn: () => void) => void
   protected readonly reminders: ReminderPort
+  private readonly hasPendingUndo: () => boolean
 
   /** When the last rotating backup was taken (throttles the next one). */
   protected lastBackupAt: Date | null = null
@@ -119,6 +126,7 @@ export class StoreBase {
     this.now = deps.now
     this.scheduler = deps.scheduler
     this.reminders = deps.reminders ?? noopReminderPort
+    this.hasPendingUndo = deps.hasPendingUndo ?? (() => false)
     this.data = init.data
     this.lastKnownGood = init.lastKnownGood
     this.lastBackupAt = init.lastBackupAt
@@ -149,10 +157,10 @@ export class StoreBase {
   /**
    * Take the document another tab just persisted, reporting whether we did.
    *
-   * Safe only because every mutation persists immediately: with the queue idle,
-   * memory and disk agree and there is nothing of ours to lose. With a write
-   * outstanding there is, so we decline — and that write's compare-and-swap
-   * then fails loudly instead of deleting the other tab's work.
+   * Safe only because every mutation persists immediately: with the queue idle
+   * and nothing else holding document state, memory and disk agree and there is
+   * nothing of ours to lose. Where there is, we decline — and our next write's
+   * compare-and-swap then fails loudly instead of deleting the other tab's work.
    */
   private adoptExternalWrite(raw: string): boolean {
     // This tab is guarding bytes it could not read. Swapping its document
@@ -160,8 +168,16 @@ export class StoreBase {
     if (this.refusingToOverwrite) return false
     if (!this.queue.isIdle) return false
     // A save that failed leaves the queue idle but this tab's changes off disk.
-    // Cleared by the next successful save, so this is a pause, not a latch.
+    // Nothing clears this: declining keeps our revision behind, so every later
+    // save fails the same check. The tab is stuck until it is reloaded, which
+    // is the point — the alternative is dropping those changes silently.
     if (this.saveError !== null) return false
+    // A pending undo holds tasks as they were before this tab's last mutation —
+    // document state adoption cannot see. Adopting would advance our revision,
+    // so clicking Undo afterwards would write that stale copy over the other
+    // tab's work and PASS the compare-and-swap. Declining costs at most the
+    // undo window, and the undo's own save then fails loudly instead.
+    if (this.hasPendingUndo()) return false
 
     let data: AppData
     try {
@@ -176,6 +192,10 @@ export class StoreBase {
     // What is on disk now, so a later snapshot copies this rather than the
     // document this tab loaded at launch — which no longer exists anywhere.
     this.lastKnownGood = raw
+    // Timers belong to the document, not the tab: an armed reminder for a task
+    // the other tab trashed would still fire, and one only they created would
+    // never be armed here at all. Same reason importData re-arms.
+    this.armAllReminders()
     this.notify()
     return true
   }
@@ -315,9 +335,9 @@ export class StoreBase {
     this.searchQuery = ''
     this.pendingDeadline = null
     this.persist()
-    // The only whole-store replacement that re-arms reminders. resetAllData
-    // and loadSampleData deliberately do not — sample reminders are metadata,
-    // not alerts to fire.
+    // Re-arms, as adopting another tab's document does. resetAllData and
+    // loadSampleData deliberately do not — sample reminders are metadata, not
+    // alerts to fire.
     this.armAllReminders()
   }
 
@@ -385,6 +405,18 @@ export class StoreBase {
   /** The rows currently pinned in place. Pins only — never suppressions. */
   get recentlyCompleted(): Set<string> {
     return this.hold.pinnedIDs
+  }
+
+  /**
+   * Whether the hold is holding anything at all — pins OR suppressions.
+   *
+   * recentlyCompleted deliberately reports only pins, because it feeds the live
+   * region. That leaves suppressions invisible to anything watching for change,
+   * and a release that clears only a suppression then repaints nothing: the
+   * recurrence spawn it was hiding stays off screen after the window closes.
+   */
+  get holdIsEmpty(): boolean {
+    return this.hold.isEmpty
   }
 
   private get queryContext(): QueryContext {

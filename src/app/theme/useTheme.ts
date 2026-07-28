@@ -28,7 +28,8 @@ function stored(): ThemeChoice {
   }
 }
 
-const OVERRIDE_ATTR = 'data-theme-override'
+/** Shared with the pre-paint stamp in index.html, which creates the meta. */
+export const THEME_COLOR_OVERRIDE_ATTR = 'data-theme-override'
 
 /**
  * The two media-keyed metas in index.html answer for the OS, and nothing ever
@@ -38,17 +39,21 @@ const OVERRIDE_ATTR = 'data-theme-override'
  * The browser reads the FIRST theme-color meta whose media matches, so the
  * override has to go in front of that pair — and has to leave again when the
  * choice returns to system, or the media query never gets its turn back.
+ *
+ * The pre-paint stamp writes the same meta already, so on load this usually
+ * adopts one rather than creating it; running from an effect is a paint too
+ * late to be the only place it happens.
  */
 function syncThemeColor(choice: ThemeChoice): void {
   const head = document.head
-  const existing = head.querySelector(`meta[name="theme-color"][${OVERRIDE_ATTR}]`)
+  const existing = head.querySelector(`meta[name="theme-color"][${THEME_COLOR_OVERRIDE_ATTR}]`)
   if (choice === 'system') {
     existing?.remove()
     return
   }
   const meta = existing ?? document.createElement('meta')
   meta.setAttribute('name', 'theme-color')
-  meta.setAttribute(OVERRIDE_ATTR, '')
+  meta.setAttribute(THEME_COLOR_OVERRIDE_ATTR, '')
   meta.setAttribute('content', TOKENS.paper[choice])
   if (existing !== null) return
   const first = head.querySelector('meta[name="theme-color"]')

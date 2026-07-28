@@ -29,6 +29,10 @@ export function App() {
       now: () => new Date(),
       scheduler: (ms, fn) => { window.setTimeout(fn, ms) },
       reminders: reminderSink,
+      // An offered undo holds tasks as they were before the last mutation, so
+      // the store must not adopt another tab's document underneath it — the
+      // undo would write that stale copy over their work.
+      hasPendingUndo: () => undoCentre.pending !== null,
     }).then((created) => {
       if (cancelled) return
       // Nothing is scheduled by loading, so arm every live reminder once the

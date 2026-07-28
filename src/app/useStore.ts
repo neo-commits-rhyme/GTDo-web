@@ -122,6 +122,10 @@ function fingerprintOf(store: AppStore): string {
     store.saveError?.message ?? '',
     store.pendingDeadline === null ? '' : store.pendingDeadline.kind,
     store.recentlyCompleted.size,
+    // Both halves of the hold, because recentlyCompleted is pins-only: a window
+    // left holding just a recurrence spawn released with the pin count already
+    // at zero, so nothing here changed and the spawn never appeared.
+    store.holdIsEmpty,
     hashDeep(5381, store.data),
   ].join('|')
 }

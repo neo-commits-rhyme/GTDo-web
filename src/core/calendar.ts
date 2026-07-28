@@ -6,9 +6,25 @@
  * Everything here is local-time. Deadlines are days, not instants (spec §5.1).
  */
 
+/**
+ * Rebuilds a date from its own local fields at the given hour.
+ *
+ * new Date(26, 0, 5) is 1926: the two-digit-year mapping lives in the
+ * constructor, and only setFullYear escapes it. parseDateInput escapes it on
+ * the way in, but every deadline is re-pinned through here on its way to the
+ * store — so without the same escape a date typed as 0026-01-05 was stored,
+ * encoded and redisplayed as 1926-01-05.
+ */
+function rebuiltAt(d: Date, hours: number): Date {
+  const year = d.getFullYear()
+  const r = new Date(year, d.getMonth(), d.getDate(), hours, 0, 0, 0)
+  r.setFullYear(year)
+  return r
+}
+
 /** Local midnight. Every day comparison in core/ goes through this. */
 export function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  return rebuiltAt(d, 0)
 }
 
 /**
@@ -18,7 +34,7 @@ export function startOfDay(d: Date): Date {
  * shift again across a timezone change; noon leaves ±11h of slack.
  */
 export function atNoon(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)
+  return rebuiltAt(d, 12)
 }
 
 export function sameDay(a: Date, b: Date): boolean {
@@ -45,8 +61,14 @@ export function addMonths(d: Date, n: number): Date {
   const r = new Date(d)
   r.setDate(1)
   r.setMonth(r.getMonth() + n)
-  const lastDayOfTargetMonth = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate()
-  r.setDate(Math.min(day, lastDayOfTargetMonth))
+  // Measured by walking r (already day 1 of the target month) forward a month
+  // and back a day, not by rebuilding it from fields: the constructor would
+  // map year 0 to 1900, and 1900 is not a leap year where year 0 is, so a
+  // Jan 31 deadline there clamped to Feb 28.
+  const probe = new Date(r)
+  probe.setMonth(probe.getMonth() + 1)
+  probe.setDate(0)
+  r.setDate(Math.min(day, probe.getDate()))
   return r
 }
 

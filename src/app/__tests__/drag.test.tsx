@@ -8,8 +8,16 @@ import { BuiltIn } from '../../core/models'
 import { StoreContext } from '../useStore'
 import { UndoContext } from '../undo/useUndo'
 import { RootShell } from '../RootShell'
+import { applyDrop, dragRefusal } from '../dnd/DragProvider'
+import { dragID, type DropContext } from '../dnd/resolve'
 
 const NOW = new Date(2026, 6, 28, 9, 0, 0)
+
+/** Trash, Today and every other smart view drag with no list of their own, so
+ *  the resolver's "already in that list" guard cannot fire from one. */
+const SMART_VIEW_DROP: DropContext = {
+  taskOrder: [], listID: null, gtdOrder: [], userOrder: [], groupMembers: {},
+}
 
 async function mount() {
   window.innerWidth = 1280
@@ -117,6 +125,81 @@ describe('Drop semantics through the store', () => {
     expect(store.incompleteTasks(BuiltIn.notes).map((t) => t.id)).toEqual([b.id, a.id])
     await user.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(store.incompleteTasks(BuiltIn.notes).map((t) => t.id)).toEqual([a.id, b.id])
+  })
+})
+
+describe('The bar follows what the store changed, not what the drop meant', () => {
+  it('aDroppedTrashedTaskDoesNotEvictTheUndoThatWouldBringItBack', async () => {
+    const { store, undo } = await mount()
+    const t = store.addTask('doomed', { kind: 'list', id: BuiltIn.notes })!
+    undo.perform(undoLabel('trashed', 1), [t.id], store, () => { store.trashTask(t.id) })
+
+    // Trash is open, the bar still offers to undo the trashing, and the user
+    // drags the task onto a list to file it back instead.
+    applyDrop({ kind: 'move-task', taskID: t.id, listID: BuiltIn.someday }, SMART_VIEW_DROP, store, undo)
+
+    expect(store.task(t.id)!.listID).toBe(BuiltIn.notes) // the restore destination, untouched
+    // The phantom “1 task moved” took the single undo slot, so the trashing it
+    // replaced could no longer be reversed from the bar or from Cmd+Z.
+    expect(undo.pending!.label).toBe('1 task trashed')
+    undo.undo(store)
+    expect(store.task(t.id)!.isTrashed).toBe(false)
+  })
+
+  it('aDropOnTheListATaskAlreadyLivesInOffersNoUndo', async () => {
+    const { store, undo } = await mount()
+    const t = store.addTask('settled', { kind: 'list', id: BuiltIn.notes })!
+
+    applyDrop({ kind: 'move-task', taskID: t.id, listID: BuiltIn.notes }, SMART_VIEW_DROP, store, undo)
+
+    expect(store.task(t.id)!.listID).toBe(BuiltIn.notes)
+    expect(undo.pending).toBeNull()
+  })
+
+  it('requestMoveReportsOnlyTheIdsItActuallyMoved', async () => {
+    const { store } = await mount()
+    const moved = store.addTask('moved', { kind: 'list', id: BuiltIn.notes })!
+    const settled = store.addTask('settled', { kind: 'list', id: BuiltIn.someday })!
+    const binned = store.addTask('binned', { kind: 'list', id: BuiltIn.notes })!
+    store.trashTask(binned.id)
+    const undated = store.addTask('undated', { kind: 'list', id: BuiltIn.notes })!
+
+    expect(store.requestMove([moved.id, settled.id, binned.id], BuiltIn.someday)).toEqual([moved.id])
+    // Bound for the prompt, so it has not moved yet — DeadlinePrompt records it.
+    expect(store.requestMove([undated.id], BuiltIn.nextActions)).toEqual([])
+    expect(store.pendingDeadline).not.toBeNull()
+  })
+
+  it('reDroppingOnSomedayStillStripsADeadlineAndStillSaysSo', async () => {
+    // Someday is the exception to “already in that list, nothing to change”:
+    // the rule strips the deadline wherever it came from, and a deadline can be
+    // set on a task that is already there. A real mutation, so a real bar.
+    const { store, undo } = await mount()
+    const t = store.addTask('later', { kind: 'list', id: BuiltIn.someday })!
+    store.setDueDate(t.id, new Date(2026, 7, 5))
+
+    applyDrop({ kind: 'move-task', taskID: t.id, listID: BuiltIn.someday }, SMART_VIEW_DROP, store, undo)
+
+    expect(store.task(t.id)!.dueDate).toBeNull()
+    expect(undo.pending!.label).toBe('1 task moved')
+    undo.undo(store)
+    expect(store.task(t.id)!.dueDate!.getDate()).toBe(5)
+  })
+})
+
+describe('A drag the store will refuse is refused visibly', () => {
+  it('aTrashedTaskIsDeclinedRatherThanAcceptedAndIgnored', async () => {
+    // Feeds both the collision detection — no sidebar row lights up as a target
+    // for a drag that cannot land — and the overlay, so the refusal arrives
+    // during the gesture rather than as a bar for a move that never happened.
+    const { store } = await mount()
+    const live = store.addTask('live', { kind: 'list', id: BuiltIn.notes })!
+    const binned = store.addTask('binned', { kind: 'list', id: BuiltIn.notes })!
+    store.trashTask(binned.id)
+
+    expect(dragRefusal(store, dragID.task(live.id))).toBeNull()
+    expect(dragRefusal(store, dragID.task(binned.id))).toContain('binned')
+    expect(dragRefusal(store, dragID.sidebar('gtd', BuiltIn.someday))).toBeNull()
   })
 })
 

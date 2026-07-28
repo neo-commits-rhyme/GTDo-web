@@ -1,12 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor,
-  closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent,
+  closestCenter, useSensor, useSensors,
+  type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import type { AppStore } from '../../core/store'
 import { undoLabel, type UndoCenter } from '../../core/undo'
-import { deadlinePromptWillOpen } from '../DeadlinePrompt'
 import { resolveDrop, type DropContext, type DropTarget } from './resolve'
 import { useStore, useStoreTick } from '../useStore'
 import { useUndoCenter } from '../undo/useUndo'
@@ -32,11 +32,14 @@ export function applyDrop(
       // for… must raise the deadline prompt rather than silently producing an
       // undated task in a list whose whole point is that everything is dated.
       const move = () => store.requestMove([target.taskID], target.listID)
-      // A drop that only raises the prompt has moved nothing yet, so there is
-      // nothing to undo; DeadlinePrompt records the move once a deadline is
-      // chosen. Offering a bar here made it read “1 task moved” over zero
-      // mutations, with an Undo that did nothing.
-      if (deadlinePromptWillOpen(store, target.taskID, target.listID)) move()
+      // The bar follows what the store will change, not what the drop meant.
+      // Three drops change nothing: one that only raises the prompt (the move
+      // is recorded by DeadlinePrompt once a deadline is chosen), one of a
+      // trashed task, and one onto the list the task already lives in. Asking
+      // whether the prompt would open caught only the first, and the other two
+      // went on offering “1 task moved” over an untouched task — evicting a
+      // live undo from the centre's single slot to do it.
+      if (store.movesNow([target.taskID], target.listID).length === 0) move()
       else undo.perform(undoLabel('moved', 1), [target.taskID], store, move)
       break
     }
@@ -51,6 +54,21 @@ export function applyDrop(
       store.moveListsInGroup(target.groupID, [target.from], target.to)
       break
   }
+}
+
+/**
+ * Why the dragged thing cannot be dropped anywhere, or null when it can.
+ *
+ * A trashed task's listID is where Restore puts it back, so the store refuses to
+ * move it — the same reason the detail pane disables its List control. The drag
+ * was accepted anyway: sidebar rows lit up as targets, the drop mutated nothing,
+ * and the only feedback was an undo bar for a move that never happened.
+ */
+export function dragRefusal(store: AppStore, activeID: string): string | null {
+  if (!activeID.startsWith('task:')) return null
+  const task = store.task(activeID.slice('task:'.length))
+  if (task === null || !task.isTrashed) return null
+  return `${task.title} — in the Trash, restore it to file it`
 }
 
 /**
@@ -81,6 +99,12 @@ export function DragProvider({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  // Nothing collides with a drag the store would refuse, so no row lights up as
+  // a target that would swallow the drop and do nothing with it.
+  const collisionDetection: CollisionDetection = (args) => (
+    dragRefusal(store, String(args.active.id)) === null ? closestCenter(args) : []
+  )
+
   const onDragStart = (e: DragStartEvent) => setActiveID(String(e.active.id))
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -93,13 +117,16 @@ export function DragProvider({
 
   const activeLabel = useMemo(() => {
     if (activeID === null || !activeID.startsWith('task:')) return null
-    return store.task(activeID.slice('task:'.length))?.title ?? null
+    const refusal = dragRefusal(store, activeID)
+    // The overlay is the only thing following the pointer, so it is where a
+    // refusal has to be said — nothing else is where the user is looking.
+    return refusal ?? store.task(activeID.slice('task:'.length))?.title ?? null
   }, [activeID, store])
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetection}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveID(null)}

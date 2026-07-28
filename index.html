@@ -12,19 +12,35 @@
     <!--
       Applied from React's effects alone, a stored choice arrives one paint too
       late: an OS-light machine set to Dark rendered the whole app light and
-      then flipped, on every load. This stamps the same attribute and the same
-      accent variables useTheme/useAccent write, before the first paint.
+      then flipped, on every load. This stamps the same attribute, the same
+      theme-color meta and the same accent variables useTheme/useAccent write,
+      before the first paint.
 
       It runs before everything else, so it must never throw — localStorage
       does exactly that in some privacy modes. The palette is duplicated here
       because nothing is imported yet; __tests__/prePaint.test.ts executes this
-      script against ACCENTS and fails the moment the two drift.
+      script against ACCENTS and TOKENS and fails the moment the two drift.
     -->
     <script>
       try {
         var root = document.documentElement
         var theme = localStorage.getItem('gtdo.theme')
-        if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+        if (theme === 'light' || theme === 'dark') {
+          root.setAttribute('data-theme', theme)
+          // data-theme alone left the two metas above answering for the OS, so
+          // the browser and PWA chrome painted the system scheme and flipped
+          // when syncThemeColor ran from its effect. The browser reads the
+          // FIRST theme-color whose media matches, so this goes in front of
+          // that pair; useTheme finds it again by the attribute and rewrites
+          // it rather than adding a second.
+          var chromeMeta = document.createElement('meta')
+          chromeMeta.setAttribute('name', 'theme-color')
+          chromeMeta.setAttribute('data-theme-override', '')
+          chromeMeta.setAttribute('content', theme === 'dark' ? '#191817' : '#FAF9F6')
+          var firstMeta = document.head.querySelector('meta[name="theme-color"]')
+          if (firstMeta) document.head.insertBefore(chromeMeta, firstMeta)
+          else document.head.appendChild(chromeMeta)
+        }
         var accent = {
           amber: ['#96570F', '#D99441'],
           ink: ['#3B3830', '#D8D4CB'],

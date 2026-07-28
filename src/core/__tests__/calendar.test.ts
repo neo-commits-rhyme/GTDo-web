@@ -22,12 +22,36 @@ describe('calendar', () => {
     expect(d.toISOString().slice(0, 10)).toBe('2026-07-28')
   })
 
+  it('yearsBelow100AreNotMappedIntoThe1900s', () => {
+    // new Date(26, 0, 5) is 1926. Both helpers tear the date down to its
+    // fields and rebuild it with that constructor, so every deadline below
+    // year 100 used to gain 1900 years on its way into the store.
+    const y26 = new Date(2026, 0, 5)
+    y26.setFullYear(26)
+    expect(startOfDay(y26).getFullYear()).toBe(26)
+    expect(atNoon(y26).getFullYear()).toBe(26)
+    const y1 = new Date(2026, 0, 1)
+    y1.setFullYear(1)
+    expect(startOfDay(y1).getFullYear()).toBe(1)
+    expect(atNoon(y1).getFullYear()).toBe(1)
+  })
+
   it('addMonthsClampsShortMonths', () => {
     const feb = addMonths(new Date(2026, 0, 31), 1)
     expect(feb.getMonth()).toBe(1)
     expect(feb.getDate()).toBe(28)
     expect(addMonths(new Date(2024, 0, 31), 1).getDate()).toBe(29) // leap year
     expect(addMonths(new Date(2026, 0, 15), 1).getDate()).toBe(15) // no clamping needed
+  })
+
+  it('addMonthsClampsAgainstTheRealYearNot1900', () => {
+    // The month-length probe used to be built from fields too, so it measured
+    // 1900 — which is not a leap year, where year 0 (the codec's floor, and so
+    // a year a decoded file can carry) is.
+    const jan31 = new Date(2000, 0, 31)
+    jan31.setFullYear(0)
+    const feb = addMonths(jan31, 1)
+    expect([feb.getFullYear(), feb.getMonth(), feb.getDate()]).toEqual([0, 1, 29])
   })
 
   it('addYearsClampsLeapDay', () => {

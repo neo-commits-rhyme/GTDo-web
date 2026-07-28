@@ -15,6 +15,9 @@ const PAIRS: [scheme: 'light' | 'dark', fg: TokenName, bg: TokenName, floor: num
   ['dark', 'done', 'paper', 4.5],
   ['light', 'overdue', 'paper', 4.5],
   ['dark', 'overdue', 'paper', 4.5],
+  // The destructive buttons are panel-filled, so paper says nothing about them.
+  ['light', 'overdue', 'panel', 4.5],
+  ['dark', 'overdue', 'panel', 4.5],
   // Ink on the sidebar panel, not just on the canvas.
   ['light', 'ink', 'panel', 4.5],
   ['dark', 'ink', 'panel', 4.5],
@@ -84,6 +87,88 @@ describe('Contrast', () => {
   })
 })
 
+/**
+ * Enough of a cascade to answer "what colour is actually painted".
+ *
+ * Reading a rule and assuming it wins is how `.detail__destructive` sat in the
+ * stylesheet for months painting nothing: a lower-specificity rule loses no
+ * matter how late it is declared, and nothing in the suite could see that.
+ */
+type Node = { tag: string; classes: string[] }
+
+/** Top-level rules, flattened out of any @media wrapper, in source order. */
+function rules(css: string): { selectors: string[]; body: string }[] {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  return [...bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map((m) => ({ selectors: m[1]!.split(',').map((s) => s.trim()), body: m[2]! }))
+    .filter((r) => !r.selectors[0]!.startsWith('@'))
+}
+
+/**
+ * One compound selector against one element. Any pseudo-class counts as a
+ * non-match, which is correct for the resting, enabled elements asked about
+ * below and stops the matcher pretending it understands :hover.
+ */
+function matchesCompound(compound: string, node: Node): boolean {
+  const parts = compound.match(/\*|[a-zA-Z][\w-]*|\.[\w-]+|::?[\w-]+(?:\([^)]*\))?|\[[^\]]*\]/g) ?? []
+  if (parts.join('') !== compound) return false
+  return parts.every((p) => {
+    if (p === '*') return true
+    if (p.startsWith('.')) return node.classes.includes(p.slice(1))
+    if (p.startsWith(':') || p.startsWith('[')) return false
+    return p.toLowerCase() === node.tag
+  })
+}
+
+/** Compounds and combinators, alternating, left to right. */
+function sequence(selector: string): string[] {
+  const seq: string[] = []
+  for (const token of selector.trim().replace(/\s*([>+~])\s*/g, ' $1 ').split(/\s+/)) {
+    if (!'>+~'.includes(token) && seq.length > 0 && !'>+~ '.includes(seq[seq.length - 1]!)) seq.push(' ')
+    seq.push(token)
+  }
+  return seq
+}
+
+/** Rightmost-first, against an ancestor chain given outermost first. */
+function matchesAt(seq: string[], si: number, chain: Node[], ci: number): boolean {
+  if (ci < 0 || !matchesCompound(seq[si]!, chain[ci]!)) return false
+  if (si === 0) return true
+  const combinator = seq[si - 1]!
+  if (combinator === '>') return matchesAt(seq, si - 2, chain, ci - 1)
+  if (combinator !== ' ') return false
+  for (let a = ci - 1; a >= 0; a--) if (matchesAt(seq, si - 2, chain, a)) return true
+  return false
+}
+
+/** (ids, classes/attrs/pseudo-classes, types/pseudo-elements). */
+function specificity(selector: string): [number, number, number] {
+  const count = (re: RegExp) => selector.match(re)?.length ?? 0
+  return [
+    count(/#[\w-]+/g),
+    count(/\.[\w-]+/g) + count(/\[[^\]]*\]/g) + count(/(?<!:):[\w-]+/g),
+    count(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g) + count(/::[\w-]+/g),
+  ]
+}
+
+/** The declaration the cascade lands on: specificity first, source order last. */
+function cascadedColor(css: string, chain: Node[]): string | null {
+  let best: { spec: [number, number, number]; value: string } | null = null
+  for (const rule of rules(css)) {
+    const declared = [...rule.body.matchAll(/(?:^|;)\s*color:\s*([^;]+)/g)].pop()?.[1]?.trim()
+    if (declared === undefined) continue
+    for (const selector of rule.selectors) {
+      const seq = sequence(selector)
+      if (!matchesAt(seq, seq.length - 1, chain, chain.length - 1)) continue
+      const spec = specificity(selector)
+      const rank = (a: [number, number, number], b: [number, number, number]) =>
+        a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+      if (best === null || rank(spec, best.spec) >= 0) best = { spec, value: declared }
+    }
+  }
+  return best?.value ?? null
+}
+
 describe('Stylesheet discipline', () => {
   it('noComponentStylesheetNamesAColour', async () => {
     // Every colour must be a token, or one of the two schemes will be wrong.
@@ -146,6 +231,38 @@ describe('Stylesheet discipline', () => {
     expect(styles, 'list title must carry the accent').toMatch(
       /\.list__title \{[^}]*var\(--accent\)/,
     )
+  })
+
+  it('theDisabledListSelectDimsTheAffordanceNotTheDestination', async () => {
+    // Chrome's UA sheet also puts opacity .7 on a disabled <select>, which the
+    // computed colour does not show: --ink-tertiary painted the option at
+    // 2.28:1 light / 2.48:1 dark, under even the 3:1 non-text floor that
+    // tertiaryIsUsableOnlyForNonInformationalContent pins as the ceiling of its
+    // legal use. The option text is the list a trashed task restores to — a
+    // datum, not a label, so it is the one thing here that may not be greyed.
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/app/styles.css', 'utf8')
+    const offenders = rules(css)
+      .filter((r) => /color:\s*var\(--ink-tertiary\)/.test(r.body))
+      .flatMap((r) => r.selectors)
+      .filter((s) => /\.detail__field\b.*\bselect\b/.test(s))
+    expect(offenders, `these grey the list name itself: ${offenders.join(', ')}`).toEqual([])
+  })
+
+  it('theDestructiveRedOutranksTheContainerRulesThatMutedIt', async () => {
+    // `.detail__destructive` is (0,1,0) and every container that holds one sets
+    // --ink on the same element at (0,1,1), so source order never got a say:
+    // "Move to trash", "Delete permanently" and "Reset all data" all painted
+    // plain ink, leaving the wording as the only cue that they are one-way.
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/app/styles.css', 'utf8')
+    for (const container of ['detail__actions', 'settings__actions']) {
+      const chain: Node[] = [
+        { tag: 'div', classes: [container] },
+        { tag: 'button', classes: ['detail__destructive'] },
+      ]
+      expect(cascadedColor(css, chain), container).toBe('var(--overdue)')
+    }
   })
 })
 

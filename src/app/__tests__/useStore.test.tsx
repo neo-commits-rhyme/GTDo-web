@@ -4,17 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { AppStore } from '../../core/store'
 import { MemoryAdapter } from '../../storage/memoryAdapter'
 import { UndoCenter } from '../../core/undo'
-import { BuiltIn } from '../../core/models'
+import { BuiltIn, RepeatPresets } from '../../core/models'
 import { StoreContext, useStoreTick } from '../useStore'
 import { UndoContext } from '../undo/useUndo'
 import { RootShell } from '../RootShell'
 
 const NOW = new Date(2026, 6, 28, 9, 0, 0)
 
-function newStore() {
-  return AppStore.create({
-    adapter: new MemoryAdapter(), now: () => NOW, scheduler: (_m, f) => f(),
-  })
+function newStore(scheduler: (ms: number, fn: () => void) => void = (_m, f) => f()) {
+  return AppStore.create({ adapter: new MemoryAdapter(), now: () => NOW, scheduler })
 }
 
 /** The tick verbatim: a component re-renders exactly when this text changes. */
@@ -43,10 +41,17 @@ async function mountProbe() {
   }
 }
 
-async function mountShell() {
+async function mountShell(options: {
+  hash?: string
+  /** Queue the hold's release rather than firing it, so a test can keep the
+   *  window open across two taps and close it by hand. */
+  scheduler?: (ms: number, fn: () => void) => void
+  seed?: (store: AppStore) => void
+} = {}) {
   window.innerWidth = 1280
-  window.location.hash = ''
-  const store = await newStore()
+  window.location.hash = options.hash ?? ''
+  const store = await newStore(options.scheduler)
+  options.seed?.(store)
   render(
     <StoreContext.Provider value={store}>
       <UndoContext.Provider value={new UndoCenter(() => {})}>
@@ -108,6 +113,37 @@ describe('The render fingerprint covers the sidebar order', () => {
 
     await user.click(screen.getByRole('button', { name: 'Move Waiting for... up' }))
     expect(labels().indexOf('Waiting for...')).toBeLessThan(labels().indexOf('Next actions'))
+  })
+})
+
+describe('The render fingerprint covers the completion hold', () => {
+  it('releasingASuppressionOnlyHoldPutsTheSpawnedOccurrenceOnScreen', async () => {
+    // Two taps inside the window — the "wrong row, undo that" correction the
+    // hold exists to absorb. The second tap unpins, so the hold is left holding
+    // the recurrence spawn and nothing else. recentlyCompleted is pins-only, so
+    // the release changed nothing the fingerprint could see and the spawned
+    // occurrence stayed off screen for the rest of the session.
+    const releases: Array<() => void> = []
+    const user = userEvent.setup()
+    const { store } = await mountShell({
+      hash: `#/list/${BuiltIn.inbox}`,
+      scheduler: (_m, f) => { releases.push(f) },
+      seed: (s) => {
+        // A rule with no deadline gets today-noon, so completing spawns tomorrow.
+        s.setRepeatRule(s.addTask('water the plants', { kind: 'list', id: BuiltIn.inbox })!.id,
+          RepeatPresets.daily)
+      },
+    })
+    const circles = () => screen.queryAllByRole('checkbox', { name: 'Complete water the plants' })
+    expect(await screen.findByRole('checkbox', { name: 'Complete water the plants' })).toBeTruthy()
+
+    await user.click(circles()[0]!)
+    await user.click(circles()[0]!)
+    expect(store.data.tasks).toHaveLength(2) // the spawn exists…
+    expect(circles()).toHaveLength(1) // …and is held out of sight
+
+    act(() => { for (const fire of releases) fire() })
+    expect(circles()).toHaveLength(2)
   })
 })
 

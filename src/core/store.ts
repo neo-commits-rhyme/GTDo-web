@@ -452,27 +452,55 @@ export class AppStore extends StoreBase {
   // MARK: - Deadline-required moves
 
   /**
+   * Which of `ids` a requestMove to `target` would move *right now*: a trashed
+   * task is refused outright, a task already in `target` has nothing to change,
+   * and an undated one bound for a deadline-required list only raises the
+   * prompt — it moves later, from completePendingDeadline.
+   *
+   * Callers need the answer BEFORE they mutate, because UndoCenter.perform
+   * snapshots first. A bar offered over a move that never happened reads
+   * “1 task moved” with an Undo that does nothing, and — the part that hurt —
+   * evicts whatever real action was still pending in the centre's single slot,
+   * so a live “1 task trashed” became unreachable from the bar and from Cmd+Z.
+   */
+  movesNow(ids: string[], target: string): string[] {
+    return ids.filter((id) => {
+      const task = this.task(id)
+      if (task === null || task.isTrashed) return false
+      // Someday is the one target that still changes a task already sitting in
+      // it — THE SOMEDAY RULE strips the deadline and the repeat wherever they
+      // came from, and one can be set on a task that is already there.
+      if (sameID(task.listID, target)) {
+        return sameID(target, BuiltIn.someday) && (task.dueDate !== null || task.repeatRule !== null)
+      }
+      return task.dueDate != null || !DEADLINE_REQUIRED_LISTS.some((l) => sameID(l, target))
+    })
+  }
+
+  /**
    * Move tasks to `target`, requiring a deadline when the target demands one.
    * Tasks that already have one move immediately; those without raise the
    * prompt and move once it is set.
+   *
+   * Returns the ids it actually moved — never the ids it was handed — so a
+   * caller cannot mistake an accepted request for a mutation.
    */
-  requestMove(ids: string[], target: string): void {
-    const movable = ids.filter((id) => this.task(id)?.isTrashed === false)
-    if (movable.length === 0) return
+  requestMove(ids: string[], target: string): string[] {
+    const moving = this.movesNow(ids, target)
+    for (const id of moving) this.moveTask(id, target)
+    if (!DEADLINE_REQUIRED_LISTS.some((l) => sameID(l, target))) return moving
 
-    if (!DEADLINE_REQUIRED_LISTS.some((l) => sameID(l, target))) {
-      for (const id of movable) this.moveTask(id, target)
-      return
-    }
-
-    for (const id of movable) if (this.task(id)?.dueDate != null) this.moveTask(id, target)
-    const needing = movable.filter((id) => this.task(id)?.dueDate == null)
+    const needing = ids.filter((id) => {
+      const task = this.task(id)
+      return task !== null && !task.isTrashed && task.dueDate == null
+    })
     if (needing.length > 0) {
       this.pendingDeadline = { kind: 'move', taskIDs: needing, target }
       // Raising the prompt is not a persisted mutation, so nothing else would
       // tell the UI to render it.
       this.notify()
     }
+    return moving
   }
 
   /**
