@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { repeatDisplayName, type RepeatRule } from '../core/models'
 import {
   formatDateInput, formatDateTimeInput, parseDateInput, parseDateTimeInput,
@@ -6,6 +6,24 @@ import {
 import { useStore, useStoreTick } from './useStore'
 import { useUndoCenter } from './undo/useUndo'
 import { undoLabel } from '../core/undo'
+import { notificationPermission, requestNotificationPermission, type PermissionState } from './reminders/scheduler'
+
+/**
+ * The limit, stated where the user is relying on it rather than in a README
+ * they will never read. See spec §3.
+ */
+function reminderHint(permission: PermissionState): string {
+  switch (permission) {
+    case 'granted':
+      return 'Fires only while GTDo is open in a tab. Anything missed is listed next time you open it.'
+    case 'denied':
+      return 'Notifications are blocked in your browser. Missed reminders are still listed next time you open GTDo.'
+    case 'unsupported':
+      return 'This browser has no notifications. Missed reminders are still listed next time you open GTDo.'
+    case 'default':
+      return 'Fires only while GTDo is open in a tab. Your browser will ask permission when you set this.'
+  }
+}
 
 const REPEAT_OPTIONS: { label: string; rule: RepeatRule | null }[] = [
   { label: 'Never', rule: null },
@@ -26,6 +44,7 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
   const undo = useUndoCenter()
   const task = store.task(taskID)
   const heading = useRef<HTMLHeadingElement>(null)
+  const [permission, setPermission] = useState<PermissionState>(notificationPermission)
 
   useEffect(() => { heading.current?.focus() }, [taskID])
 
@@ -71,9 +90,23 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
         <span>Reminder</span>
         <input
           type="datetime-local"
+          // A hint is a description, not part of the name: folding it into the
+          // label would have every screen reader announce the whole paragraph
+          // before the field.
+          aria-describedby="reminder-hint"
           value={formatDateTimeInput(task.reminderDate)}
-          onChange={(e) => store.setReminder(task.id, parseDateTimeInput(e.target.value))}
+          onChange={(e) => {
+            const at = parseDateTimeInput(e.target.value)
+            store.setReminder(task.id, at)
+            // Asked on the FIRST reminder, never on load: a prompt before the
+            // user has asked for anything is the one people deny reflexively,
+            // and a denial here is effectively permanent.
+            if (at !== null && permission === 'default') {
+              void requestNotificationPermission().then(setPermission)
+            }
+          }}
         />
+        <span className="detail__hint" id="reminder-hint">{reminderHint(permission)}</span>
       </label>
 
       {/* No deadline, no repeat — a repeat rule needs a day to repeat from. */}
