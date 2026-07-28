@@ -33,7 +33,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
       <li key={view}>
         <button
           type="button"
-          className={`nav__item${isSelected(item) ? ' nav__item--selected' : ''}`}
+          className={`nav__item nav__item--smart${isSelected(item) ? ' nav__item--selected' : ''}`}
           aria-current={isSelected(item) ? 'page' : undefined}
           onClick={() => onNavigate(item)}
         >

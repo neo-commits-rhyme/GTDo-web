@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import type { SnapshotMeta } from '../core/ports'
 import { downloadExport, importText, restoreSnapshot } from './transfer'
 import { useStore, useStoreTick } from './useStore'
-import { useTheme, type ThemeChoice } from './theme/useTheme'
-import { useAccent } from './theme/useAccent'
-import { ACCENTS } from './theme/accents'
+import type { ThemeChoice } from './theme/useTheme'
+import { ACCENTS, type AccentID } from './theme/accents'
 import { readableInkOn } from './theme/contrast'
 import { completionSoundEnabled, setCompletionSoundEnabled } from './sound'
 
@@ -15,13 +14,19 @@ export function autoEmptyTrashEnabled(): boolean {
   return localStorage.getItem(AUTO_EMPTY_TRASH_KEY) === 'true'
 }
 
-export function SettingsSheet({ onClose }: { onClose: () => void }) {
+export function SettingsSheet({
+  onClose, theme, setTheme, accent, setAccent,
+}: {
+  onClose: () => void
+  theme: ThemeChoice
+  setTheme: (c: ThemeChoice) => void
+  accent: AccentID
+  setAccent: (id: AccentID) => void
+}) {
   useStoreTick()
   const store = useStore()
   const [autoEmpty, setAutoEmpty] = useState(autoEmptyTrashEnabled)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
-  const [theme, setTheme] = useTheme()
-  const [accent, setAccent] = useAccent()
   const [sound, setSound] = useState(completionSoundEnabled)
   const [error, setError] = useState<string | null>(null)
 

@@ -70,19 +70,28 @@ These are bare keys, not `⌘`-chords like the macOS app. Browsers own `⌘N`,
 `⌘F` and `⌘,` — on Windows and Linux unavoidably so. See
 [`docs/assumptions.md`](docs/assumptions.md) for what was measured.
 
+## Appearance
+
+Settings carries **System / Light / Dark** and seven accent colours, both stored
+in this browser. Lists can be given one of twelve colours and sixteen icons —
+the same twelve hexes and sixteen symbol names the macOS app uses, so a list
+customised here opens there looking the same.
+
+Completing a task plays a short synthesised tone, which you can turn off.
+`prefers-reduced-motion` removes every spring and scale transform.
+
 ## Not here yet
 
-Sub-project 1 of five. Still to come: the full visual identity and list
-colours (2), drag-and-drop and swipe actions (3), Inbox Review (4), and
-reminders plus offline install (5). Reminders will always be weaker than the
-macOS app's — a web page cannot wake itself up without a push server, and this
-one deliberately has no server.
+Sub-projects 1 and 2 of five. Still to come: drag-and-drop and swipe actions
+(3), Inbox Review (4), and reminders plus offline install (5). Reminders will
+always be weaker than the macOS app's — a web page cannot wake itself up
+without a push server, and this one deliberately has no server.
 
 ## Development
 
 ```bash
 npm install
-npm test          # 301 unit tests
+npm test          # 372 unit tests
 npm run dev
 npm run build
 ```
@@ -92,6 +101,8 @@ npm run build
   it.
 - `src/storage/` — IndexedDB, plus memory and always-failing adapters for tests.
 - `src/app/` — the React shell.
+- `src/app/theme/` — colour tokens, and the contrast suite that guards them. No
+  stylesheet outside `theme/` may name a colour; a test enforces it.
 
 `npm run probe` re-runs the browser measurements behind `docs/assumptions.md`.
 

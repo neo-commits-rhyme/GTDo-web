@@ -91,9 +91,9 @@ body {
 /* ---------------------------------------------------------------- sidebar */
 
 .nav__group { list-style: none; margin: 0 0 10px; padding: 0; }
-.nav__group > li { display: flex; flex-wrap: wrap; align-items: center; }
-.nav__group > li > .nav__item { flex: 1; min-width: 0; }
-.nav__nested { list-style: none; margin: 0 0 0 14px; padding: 0; flex-basis: 100%; }
+.nav__group li { display: flex; flex-wrap: wrap; align-items: center; }
+.nav__group li > .nav__item { flex: 1; min-width: 0; }
+.nav__nested { list-style: none; margin: 0 0 0 14px; padding: 0; flex-basis: 100%; display: block; }
 
 .nav__heading {
   font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
@@ -112,12 +112,15 @@ body {
 /* The icon inherits the list tint via an inline colour; with no tint it stays
    secondary ink so an uncustomised list is quiet rather than black. */
 .nav__icon { display: flex; color: var(--ink-secondary); flex: none; }
+/* Smart views carry no list record and so no icon. Pad them by the icon's
+   width so every label in the sidebar starts on the same vertical line. */
+.nav__item--smart { padding-left: calc(7px + 15px + 7px); }
 .nav__edit {
   background: none; border: 0; color: var(--ink-secondary); cursor: pointer;
   padding: 2px 5px; border-radius: 4px; opacity: 0;
   transition: opacity var(--spring-standard);
 }
-.nav__group > li:hover .nav__edit, .nav__edit:focus-visible { opacity: 1; }
+.nav__group li:hover > .nav__edit, .nav__edit:focus-visible { opacity: 1; }
 .nav__edit:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 
 .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 4px; }
@@ -144,7 +147,7 @@ body {
 .icon-choice--selected { border-color: var(--ink); color: var(--ink); background: var(--selection); }
 
 .nav__reorder { display: flex; opacity: 0; transition: opacity var(--spring-standard); }
-.nav__group > li:hover .nav__reorder, .nav__reorder:focus-within { opacity: 1; }
+.nav__group li:hover > .nav__reorder, .nav__reorder:focus-within { opacity: 1; }
 .nav__reorder button {
   background: none; border: 0; color: var(--ink-secondary);
   cursor: pointer; padding: 2px 4px; line-height: 1;

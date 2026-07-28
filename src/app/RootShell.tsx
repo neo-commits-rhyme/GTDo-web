@@ -12,6 +12,8 @@ import { useBreakpoint } from './useBreakpoint'
 import { useRoute } from './useRoute'
 import { useShortcuts } from './useShortcuts'
 import { useStore, useStoreTick } from './useStore'
+import { useTheme } from './theme/useTheme'
+import { useAccent } from './theme/useAccent'
 
 /**
  * Layout A: sidebar 240 | task list | detail.
@@ -31,6 +33,10 @@ export function RootShell() {
   const breakpoint = useBreakpoint()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [narrowPane, setNarrowPane] = useState<'lists' | 'tasks'>('tasks')
+  // Held here, not in Settings: a theme that only applies while the sheet is
+  // open is not a theme.
+  const [theme, setTheme] = useTheme()
+  const [accent, setAccent] = useAccent()
 
   const openSettings = useCallback(() => setSettingsOpen(true), [])
   useShortcuts(navigate, openSettings)
@@ -86,7 +92,15 @@ export function RootShell() {
       )}
 
       <DeadlinePrompt />
-      {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsSheet
+          onClose={() => setSettingsOpen(false)}
+          theme={theme}
+          setTheme={setTheme}
+          accent={accent}
+          setAccent={setAccent}
+        />
+      )}
     </div>
   )
 }
