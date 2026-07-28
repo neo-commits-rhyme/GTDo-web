@@ -13,7 +13,7 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
   const token = deadlineToken(task.dueDate, store.today, completed)
 
   return (
-    <li className={`row${selected ? ' row--selected' : ''}`}>
+    <li className={`row${selected ? ' row--selected' : ''}${completed ? ' row--done' : ''}`}>
       <button
         type="button"
         className="row__circle"
