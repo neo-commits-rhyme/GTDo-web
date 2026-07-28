@@ -128,8 +128,8 @@ body {
 /* ---------------------------------------------------------------- list */
 
 .list__title {
-  font-family: var(--serif); font-size: 21px; font-weight: 600;
-  letter-spacing: 0; margin: 0 0 10px;
+  font-family: var(--serif); font-size: 22px; font-weight: 600;
+  font-optical-sizing: auto; letter-spacing: 0; margin: 0 0 10px;
 }
 .list__meta, .list__empty { color: var(--ink-secondary); }
 .list__section-title {
@@ -183,7 +183,7 @@ body {
 
 .detail { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .detail__header { display: flex; align-items: center; justify-content: space-between; }
-.detail__heading { font-family: var(--serif); font-size: 16px; font-weight: 600; margin: 0; }
+.detail__heading { font-size: 14px; font-weight: 640; margin: 0; }
 .detail__header button {
   background: none; border: 0; color: var(--ink-secondary); cursor: pointer; font-size: 15px;
 }
@@ -216,7 +216,7 @@ body {
   min-width: min(420px, 92vw); max-height: 86vh; overflow-y: auto;
   border: 1px solid var(--rule); box-shadow: var(--shadow-dialog);
 }
-.prompt__panel h2 { font-family: var(--serif); font-weight: 600; margin: 0 0 6px; }
+.prompt__panel h2 { font-size: 15px; font-weight: 640; margin: 0 0 6px; }
 .prompt__panel h3 {
   font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
   color: var(--ink-secondary); margin: 16px 0 6px;

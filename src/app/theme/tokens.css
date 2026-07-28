@@ -1,4 +1,17 @@
 /*
+ * Source Serif 4 Variable, subset to the characters this UI renders.
+ * SIL Open Font License 1.1. Self-hosted: a strict CSP blocks third-party
+ * origins, and a font is not worth a dependency on someone else's uptime.
+ */
+@font-face {
+  font-family: 'GTDo Serif';
+  src: url('/GTDo-web/fonts/gtdo-serif.woff2') format('woff2-variations');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
  * Paper. Mirrors src/app/theme/tokens.ts — the contrast suite keeps them in step.
  *
  * Nothing outside this file may name a colour. Every component reads var(--…),
