@@ -133,14 +133,27 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
         </label>
       )}
 
+      {/* A trashed task's listID is where Restore puts it back, so the store
+          refuses to move it. The control used to be offered anyway: changing it
+          silently did nothing and the pane went on showing the old list, which
+          reads as the app losing the edit rather than declining it. Disabled and
+          explained instead — the destination is worth seeing even when it cannot
+          be changed. */}
       <label className="detail__field">
         <span>List</span>
-        <select value={task.listID} onChange={(e) => move(e.target.value)}>
+        <select
+          value={task.listID}
+          disabled={task.isTrashed}
+          onChange={(e) => move(e.target.value)}
+        >
           {store.data.lists.map((l) => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}
         </select>
       </label>
+      {task.isTrashed && (
+        <p className="detail__hint">Restore this task to move it — this is where it goes back to.</p>
+      )}
 
       <label className="detail__field detail__field--note">
         <span>Note</span>
@@ -148,7 +161,11 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
       </label>
 
       <div className="detail__actions">
-        <button type="button" onClick={() => store.convertToProject(task.id)}>
+        {/* Same lie as the List field above: convertToProject bails on a trashed
+            task and returns null, so the button did nothing at all — no project,
+            no error, no change. Nothing is left behind (the guard runs before
+            the list is created); the click simply vanished. */}
+        <button type="button" disabled={task.isTrashed} onClick={() => store.convertToProject(task.id)}>
           Convert to project
         </button>
         {task.isTrashed ? (

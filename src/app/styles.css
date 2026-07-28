@@ -355,6 +355,15 @@ body {
   font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
   color: var(--ink-secondary); line-height: 1.35;
 }
+/* The pane is a flex column with its own gap; a <p> hint would add browser
+   margins on top of it. The reminder hint is an inline span and never hit this. */
+p.detail__hint { margin: -6px 0 0; }
+/* A disabled control that looks exactly like an enabled one is the same lie as
+   a control that silently does nothing. Tertiary ink is legal here and only
+   here: the contrast suite pins it below the 4.5:1 text floor precisely so it
+   cannot carry information, which a disabled state does not. */
+.detail__actions button:disabled,
+.detail__field select:disabled { color: var(--ink-tertiary); cursor: default; }
 .detail__field--note textarea { min-height: 120px; resize: vertical; }
 .detail__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .detail__actions button {
