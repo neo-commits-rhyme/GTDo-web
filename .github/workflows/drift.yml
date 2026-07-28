@@ -1,0 +1,37 @@
+name: drift
+
+# The whole answer to the separate-repo risk.
+#
+# GTDo-web reimplements the macOS app's data model in TypeScript, so there is
+# no shared test suite keeping the two honest. This job decodes our output with
+# the macOS app's OWN Models.swift and fails loudly when they disagree.
+#
+# The GTDo ref is pinned deliberately. Bump it by hand when the model changes,
+# never automatically — an automatic bump would hide exactly the change this
+# job exists to catch.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  interop:
+    runs-on: ubuntu-latest
+    container: swift:6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the macOS app at a pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: neo-commits-rhyme/GTDo
+          ref: a1cbe0f7f99c1ba9fd84aff631ea5f22956b0221
+          path: gtdo-swift
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: TypeScript output must decode with the macOS app's own models
+        run: |
+          cat gtdo-swift/Sources/GTDo/Models/Models.swift scripts/drift-main.swift > /tmp/check.swift
+          npx tsx scripts/emit-fixture.ts | swift /tmp/check.swift
