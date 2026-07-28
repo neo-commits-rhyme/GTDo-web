@@ -9,11 +9,10 @@ const NOW = new Date(2026, 6, 28, 9, 0, 0)
 const immediate = (_ms: number, fn: () => void) => fn()
 
 /**
- * The hook the IndexedDB adapter offers and the memory one does not — the
- * store must work either way, so the stand-in carries it explicitly.
+ * MemoryAdapter carries onExternalWrite itself now, so this only adds the one
+ * thing the real adapters cannot be asked to do on demand: fail a load.
  */
 class CrossTabAdapter extends MemoryAdapter {
-  onExternalWrite: ((raw: string, revision: number) => boolean) | null = null
   loadFails = false
 
   override async load(): Promise<LoadResult> {

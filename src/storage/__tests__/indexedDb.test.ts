@@ -10,7 +10,11 @@ import { seededAppData } from '../../core/models'
 // a behavioural gap between the adapter the tests use and the adapter the app
 // uses cannot hide.
 let dbSeq = 0
-adapterContract('IndexedDbAdapter', () => new IndexedDbAdapter(`contract-${dbSeq++}`))
+adapterContract('IndexedDbAdapter', () => {
+  // Same database name is what makes two adapters two tabs.
+  const name = `contract-${dbSeq++}`
+  return () => new IndexedDbAdapter(name)
+})
 
 describe('IndexedDbAdapter', () => {
   it('survivesAReopenWithTheSameName', async () => {

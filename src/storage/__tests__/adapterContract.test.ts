@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { MemoryAdapter } from '../memoryAdapter'
+import { MemoryAdapter, MemoryBacking } from '../memoryAdapter'
 import { FailingAdapter } from '../failingAdapter'
+import { StaleWriteError } from '../../core/ports'
 import type { StoragePort } from '../../core/ports'
 
 /**
@@ -8,11 +9,17 @@ import type { StoragePort } from '../../core/ports'
  * against IndexedDbAdapter, so a behavioural difference between the adapter
  * the tests use and the adapter the app uses cannot hide.
  */
-export function adapterContract(name: string, make: () => StoragePort) {
+export function adapterContract(name: string, openGroup: () => () => StoragePort) {
   describe(`${name} contract`, () => {
+    // openGroup() opens one storage; calling what it returns opens another
+    // adapter over THAT SAME storage — a second tab. Compare-and-swap is a
+    // guarantee between writers over one record, so it cannot be stated, let
+    // alone tested, against a factory that hands out isolated stores.
+    let openTab: () => StoragePort
     let a: StoragePort
     beforeEach(() => {
-      a = make()
+      openTab = openGroup()
+      a = openTab()
     })
 
     it('loadOnEmptyIsAbsent', async () => {
@@ -72,10 +79,61 @@ export function adapterContract(name: string, make: () => StoragePort) {
       expect(list.length).toBe(21)
       expect(list.at(-1)!.id).toBe('2026-01-01-000000')
     })
+
+    // Two tabs is ordinary usage. Before this, every save blindly rewrote the
+    // whole document from a copy loaded at boot, so the second tab to save
+    // deleted everything the first one did — silently, with no error anywhere.
+    describe('two writers over one record', () => {
+      it('refusesAWriteFromATabThatNeverSawTheOtherTabsSave', async () => {
+        const b = openTab()
+        await a.load()
+        await b.load()
+        await a.persist('written by A')
+        // b still holds what it loaded at boot; its save must not win.
+        await expect(b.persist('written by B')).rejects.toThrow(StaleWriteError)
+        expect(await a.load()).toEqual({ kind: 'ok', raw: 'written by A' })
+      })
+
+      it('letsThatTabWriteOnceItHasReadTheNewerRecord', async () => {
+        // The refusal is about unseen bytes, not about the tab. Reading clears
+        // it — otherwise a rejected tab could never save again.
+        const b = openTab()
+        await a.load()
+        await b.load()
+        await a.persist('written by A')
+        await b.load()
+        await b.persist('written by B')
+        expect(await a.load()).toEqual({ kind: 'ok', raw: 'written by B' })
+      })
+
+      it('doesNotRefuseAWriterThatIsAloneWithTheRecord', async () => {
+        // The guard must key on an unseen revision, not on the mere existence
+        // of a second adapter, or every ordinary save would start failing.
+        const b = openTab()
+        await b.load()
+        await a.load()
+        await a.persist('one')
+        await a.persist('two')
+        await a.persist('three')
+        expect(await a.load()).toEqual({ kind: 'ok', raw: 'three' })
+      })
+
+      it('refusesAFirstWriteAgainstARecordItNeverLoaded', async () => {
+        // A tab that boots, never reads, and saves is the same hazard: it has
+        // seen nothing, so it must not be allowed to flatten what is there.
+        await a.load()
+        await a.persist('written by A')
+        const b = openTab()
+        await expect(b.persist('written by B')).rejects.toThrow(StaleWriteError)
+      })
+    })
   })
 }
 
-adapterContract('MemoryAdapter', () => new MemoryAdapter())
+adapterContract('MemoryAdapter', () => {
+  const backing = new MemoryBacking()
+  return () => new MemoryAdapter(backing)
+})
 
 describe('FailingAdapter', () => {
   it('persistRejectsWithQuotaExceeded', async () => {

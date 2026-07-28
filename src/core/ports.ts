@@ -27,6 +27,21 @@ export type SnapshotMeta = {
   bytes: number
 }
 
+/**
+ * A save refused because another writer moved the record on since this one last
+ * read it. Losing the save loudly beats overwriting work nobody has seen.
+ *
+ * Declared here rather than in an adapter because every adapter over shared
+ * storage owes the same guarantee, and the store catches one type regardless of
+ * which adapter it was handed.
+ */
+export class StaleWriteError extends Error {
+  constructor(readonly storedRevision: number, readonly seenRevision: number) {
+    super('Another tab saved a newer version of this data. Reload to see it — this change was not saved.')
+    this.name = 'StaleWriteError'
+  }
+}
+
 export interface StoragePort {
   load(): Promise<LoadResult>
   /** Rejects on quota exhaustion, eviction, or a corrupt store. */

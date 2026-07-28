@@ -13,6 +13,7 @@
  */
 
 import { keepSet, snapshotStamp } from '../core/snapshotPolicy'
+import { StaleWriteError } from '../core/ports'
 import type { LoadResult, SnapshotMeta, StoragePort } from '../core/ports'
 
 const DB_VERSION = 1
@@ -43,17 +44,6 @@ function asRecord(value: unknown): DataRecord | null {
   return { raw: record.raw, revision: typeof record.revision === 'number' ? record.revision : 0 }
 }
 
-/**
- * A save refused because another tab moved the record on. Reported through the
- * store's saveError: losing this save loudly beats overwriting the other tab's
- * work silently, which is what happened before.
- */
-export class StaleWriteError extends Error {
-  constructor(readonly storedRevision: number, readonly seenRevision: number) {
-    super('Another tab saved a newer version of this data. Reload to see it — this change was not saved.')
-    this.name = 'StaleWriteError'
-  }
-}
 
 function promisify<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
