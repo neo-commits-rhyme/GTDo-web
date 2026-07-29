@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#FFFFFF"/>
+  <!-- Optically centred on 256,256 and, with the stroke, entirely inside the
+       410px maskable safe circle, so a rounded OS crop cannot clip it. -->
+  <path d="M144 260 L216 332 L368 180"
+        fill="none" stroke="#96570F" stroke-width="54"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
