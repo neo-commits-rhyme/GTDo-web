@@ -3,6 +3,7 @@ import { LIST_COLORS, LIST_SYMBOLS } from './theme/listPalette'
 import { readableInkOn } from './theme/contrast'
 import { ListIcon } from './ListIcon'
 import { useStore, useStoreTick } from './useStore'
+import { BuiltIn } from '../core/models'
 
 /**
  * Rename, recolour and re-icon a user list.
@@ -89,7 +90,50 @@ export function ListEditor({ listID, onClose }: { listID: string; onClose: () =>
           })}
         </div>
 
+        {/* Where the list lives. macOS offers this as a "Move to group"
+            submenu; a select is the same choice, reachable from the keyboard,
+            and it is the only route into a group until sidebar rows become
+            draggable. Projects is included because moving a list there is what
+            makes it a project. */}
+        <label className="prompt__field">
+          <span>Group</span>
+          <select
+            value={list.groupID ?? ''}
+            onChange={(e) => store.moveList(list.id, e.target.value === '' ? null : e.target.value)}
+          >
+            <option value="">None</option>
+            <option value={BuiltIn.projectsGroup}>Projects</option>
+            {store.userGroups().map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="prompt__actions">
+          {/* Completing is the headline action for a project, and it is hidden —
+              not shown and inert — on every list that is not a live project.
+              It confirms only when there are open tasks to close: finishing an
+              already-empty project is a no-op that deserves no ceremony. */}
+          {store.canCompleteList(listID) && (
+            <button
+              type="button"
+              className="prompt__complete"
+              onClick={() => {
+                const open = store.openTaskCount(listID)
+                const ok = open === 0 || window.confirm(
+                  `“${store.list(listID)?.name ?? 'This project'}” and its ${open} open `
+                  + `task${open === 1 ? '' : 's'} will be marked complete. `
+                  + 'You can un-complete it from Completed projects.',
+                )
+                if (!ok) return
+                commitName()
+                store.completeList(listID)
+                onClose()
+              }}
+            >
+              Complete project
+            </button>
+          )}
           <button type="button" onClick={() => { commitName(); onClose() }}>Done</button>
         </div>
       </div>

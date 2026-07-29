@@ -40,6 +40,27 @@ const REPEAT_OPTIONS: { label: string; rule: RepeatRule | null }[] = [
  * The detail pane. Closing it returns focus to the row that opened it — a
  * pane that swallows focus on close strands anyone navigating by keyboard.
  */
+/**
+ * Open the native calendar on a click anywhere in the field.
+ *
+ * A bare <input type="date"> only opens its picker from the small calendar
+ * glyph; clicking the text just focuses, so the field reads as inert. Guarded:
+ * showPicker throws without user activation and is missing on older Safari, and
+ * either way the field still types.
+ */
+/** Already due today — the star has nothing left to do. */
+function isDueToday(store: { today: Date }, task: { dueDate: Date | null }): boolean {
+  if (task.dueDate === null) return false
+  const d = task.dueDate
+  const t = store.today
+  return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth()
+    && d.getDate() === t.getDate()
+}
+
+function openPicker(e: { currentTarget: HTMLInputElement }): void {
+  try { e.currentTarget.showPicker?.() } catch { /* not supported here */ }
+}
+
 export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () => void }) {
   useStoreTick()
   const store = useStore()
@@ -88,6 +109,7 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
           min={ISO_DATE_MIN}
           max={ISO_DATE_MAX}
           value={formatDateInput(task.dueDate)}
+          onClick={openPicker}
           onChange={(e) => store.setDueDate(task.id, parseDateInput(e.target.value))}
         />
       </label>
@@ -101,6 +123,7 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
           // before the field.
           aria-describedby="reminder-hint"
           value={formatDateTimeInput(task.reminderDate)}
+          onClick={openPicker}
           onChange={(e) => {
             const at = parseDateTimeInput(e.target.value)
             store.setReminder(task.id, at)
@@ -161,6 +184,17 @@ export function DetailPane({ taskID, onClose }: { taskID: string; onClose: () =>
       </label>
 
       <div className="detail__actions">
+        {/* One click for the commonest deadline there is. Disabled once it is
+            already due today, so the button states the fact rather than
+            silently doing nothing — and on a trashed task, whose dueDate is
+            not the user's to change from here. */}
+        <button
+          type="button"
+          disabled={task.isTrashed || isDueToday(store, task)}
+          onClick={() => store.addToToday(task.id)}
+        >
+          {isDueToday(store, task) ? 'Added to Today' : 'Add to Today'}
+        </button>
         {/* Same lie as the List field above: convertToProject bails on a trashed
             task and returns null, so the button did nothing at all — no project,
             no error, no change. Nothing is left behind (the guard runs before

@@ -1,4 +1,5 @@
-import { BuiltIn, SMART_VIEWS, sameID, sidebarItemsEqual, type SidebarItem, type SmartView } from '../core/models'
+import { BuiltIn, SMART_VIEWS, sameID, sidebarItemsEqual, type ListGroup, type SidebarItem, type SmartView } from '../core/models'
+import { groupCountLabel } from '../core/queries'
 import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { dragID } from './dnd/resolve'
@@ -10,6 +11,7 @@ const SMART_LABELS: Record<SmartView, string> = {
   today: 'Today',
   calendar: 'Calendar',
   completed: 'Completed',
+  completedProjects: 'Completed projects',
   trash: 'Trash',
 }
 
@@ -31,19 +33,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
   /** Smart views have no list record, so they render plainly. */
   const smartLink = (view: SmartView) => {
     const item: SidebarItem = { kind: 'smart', view }
-    return (
-      <li key={view}>
-        <button
-          type="button"
-          className={`nav__item${isSelected(item) ? ' nav__item--selected' : ''}`}
-          aria-current={isSelected(item) ? 'page' : undefined}
-          onClick={() => onNavigate(item)}
-        >
-          <span className="nav__icon"><ListIcon symbol={SMART_SYMBOLS[view]} /></span>
-          <span className="nav__label">{SMART_LABELS[view]}</span>
-        </button>
-      </li>
-    )
+    return <SmartLink key={view} view={view} item={item} selected={isSelected(item)} onNavigate={onNavigate} />
   }
 
   /** What the row's badge counts: the rows the list actually opens with. Next
@@ -75,6 +65,13 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
   // mapping a position back into an order containing rows nobody can see.
   const gtdEntries = store.visibleGTDEntries()
   const projectsGroup = allGTD.find((e) => e.kind === 'group' && sameID(e.group.id, BuiltIn.projectsGroup))
+  const projects = projectsGroup !== undefined && projectsGroup.kind === 'group'
+    ? store.listsInGroup(projectsGroup.group.id)
+    : []
+  // Dropping a task on the header turns it into a project — the same gesture
+  // macOS offers, and the only sidebar route to a project there.
+  const { setNodeRef: projectsHeaderRef, isOver: projectsHeaderOver } =
+    useDroppable({ id: dragID.projectsHeaderDrop() })
   const userEntries = store.userSectionItems()
 
   return (
@@ -113,10 +110,15 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
 
       {projectsGroup !== undefined && projectsGroup.kind === 'group' && (
         <>
-          <h2 className="nav__heading">Projects</h2>
+          <h2 ref={projectsHeaderRef} className={`nav__heading${projectsHeaderOver ? ' nav__heading--over' : ''}`}>
+            Projects
+            {groupCountLabel(projects.length) !== null && (
+              <span className="nav__heading-count">{groupCountLabel(projects.length)}</span>
+            )}
+          </h2>
           <ul className="nav__group">
-            {store.listsInGroup(projectsGroup.group.id).map((l) => listLink(l.id))}
-            {store.listsInGroup(projectsGroup.group.id).length === 0 && (
+            {projects.map((l) => listLink(l.id))}
+            {projects.length === 0 && (
               <li className="nav__empty">
                 No projects yet. Turn a task into one from its detail pane.
               </li>
@@ -158,18 +160,13 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
               />
             </li>
           ) : (
-            <li key={entry.group.id} className="nav__group-row">
-              <span className="nav__label nav__label--group">{entry.group.name}</span>
-              <ReorderButtons
-                label={entry.group.name}
-                index={i}
-                count={userEntries.length}
-                onMove={(from, to) => store.moveUserEntries([from], to)}
-              />
-              <ul className="nav__nested">
-                {store.listsInGroup(entry.group.id).map((l) => listLink(l.id))}
-              </ul>
-            </li>
+            <GroupRow
+              key={entry.group.id}
+              group={entry.group}
+              index={i}
+              siblingCount={userEntries.length}
+              renderList={listLink}
+            />
           ),
         )}
       </ul>
@@ -180,7 +177,10 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
         {smartLink('trash')}
       </ul>
 
-      <NewListButton />
+      <div className="nav__new-row">
+        <NewListButton />
+        <NewGroupButton />
+      </div>
       {editing !== null && <ListEditor listID={editing} onClose={() => setEditing(null)} />}
     </nav>
   )
@@ -263,6 +263,22 @@ function ReorderButtons({
   )
 }
 
+function NewGroupButton() {
+  const store = useStore()
+  return (
+    <button
+      type="button"
+      className="nav__new"
+      onClick={() => {
+        const name = window.prompt('New group name')
+        if (name !== null) store.addGroup(name)
+      }}
+    >
+      + New group
+    </button>
+  )
+}
+
 function NewListButton() {
   const store = useStore()
   return (
@@ -276,5 +292,110 @@ function NewListButton() {
     >
       + New list
     </button>
+  )
+}
+
+
+/** Today and Trash accept a dropped task; the computed views do not, so they
+ *  register no droppable at all and never light up. */
+function SmartLink({ view, item, selected, onNavigate }: {
+  view: SmartView
+  item: SidebarItem
+  selected: boolean
+  onNavigate: (item: SidebarItem) => void
+}) {
+  const accepts = view === 'today' || view === 'trash'
+  const { setNodeRef, isOver } = useDroppable({ id: dragID.smartDrop(view), disabled: !accepts })
+  return (
+    <li>
+      <button
+        ref={accepts ? setNodeRef : undefined}
+        type="button"
+        className={`nav__item${selected ? ' nav__item--selected' : ''}${isOver ? ' nav__item--over' : ''}`}
+        aria-current={selected ? 'page' : undefined}
+        onClick={() => onNavigate(item)}
+      >
+        <span className="nav__icon"><ListIcon symbol={SMART_SYMBOLS[view]} /></span>
+        <span className="nav__label">{SMART_LABELS[view]}</span>
+      </button>
+    </li>
+  )
+}
+
+
+/**
+ * A user group: collapsible, renameable, deletable, and a drop target so a
+ * list dragged onto it is filed there.
+ *
+ * Collapsed state is component state, not stored: it is a view preference, and
+ * data.json is shared with two other apps through a fixed-key encoder that
+ * would drop it.
+ */
+function GroupRow({ group, index, siblingCount, renderList }: {
+  group: ListGroup
+  index: number
+  siblingCount: number
+  renderList: (listID: string) => React.ReactNode
+}) {
+  const store = useStore()
+  const [collapsed, setCollapsed] = useState(false)
+  const members = store.listsInGroup(group.id)
+  const count = groupCountLabel(members.length)
+  return (
+    <li className="nav__group-row">
+      <div className="nav__group-head">
+        <button
+          type="button"
+          className="nav__disclose"
+          aria-expanded={!collapsed}
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+          <span className="nav__label nav__label--group">
+            {group.name}
+            {count !== null && <span className="nav__heading-count">{count}</span>}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="nav__row-action"
+          aria-label={`Rename ${group.name}`}
+          onClick={() => {
+            const name = window.prompt('Rename group', group.name)
+            if (name !== null) store.renameGroup(group.id, name)
+          }}
+        >
+          Rename
+        </button>
+        <button
+          type="button"
+          className="nav__row-action"
+          aria-label={`Delete ${group.name}`}
+          onClick={() => {
+            // Deleting a group keeps its lists — they become ungrouped — so the
+            // wording promises exactly that and no backup scare is warranted.
+            const ok = window.confirm(
+              `Delete “${group.name}”? Its ${members.length} list`
+              + `${members.length === 1 ? '' : 's'} will move out of the group, not be deleted.`,
+            )
+            if (ok) store.deleteGroup(group.id)
+          }}
+        >
+          Delete
+        </button>
+      </div>
+      <ReorderButtons
+        label={group.name}
+        index={index}
+        count={siblingCount}
+        onMove={(from, to) => store.moveUserEntries([from], to)}
+      />
+      {!collapsed && (
+        <ul className="nav__nested">
+          {members.map((l) => renderList(l.id))}
+          {members.length === 0 && <li className="nav__empty">No lists in this group.</li>}
+        </ul>
+      )}
+    </li>
   )
 }

@@ -84,10 +84,10 @@ export function makeSampleData(reference: Date): AppData {
 
   data.groups.push({ id: SampleIDs.areasGroup, name: 'Areas', isBuiltIn: false, order: 1 })
   data.lists.push(
-    { id: SampleIDs.workList, name: 'Work', isBuiltIn: false, groupID: SampleIDs.areasGroup, order: 10, colorHex: '#007AFF', symbol: 'briefcase' },
-    { id: SampleIDs.homeList, name: 'Home', isBuiltIn: false, groupID: SampleIDs.areasGroup, order: 11, colorHex: '#34C759', symbol: 'house' },
-    { id: SampleIDs.readingList, name: 'Reading', isBuiltIn: false, groupID: null, order: 12, colorHex: '#AF52DE', symbol: 'book' },
-    { id: SampleIDs.siteProject, name: 'Website redesign', isBuiltIn: false, groupID: BuiltIn.projectsGroup, order: 13, colorHex: '#FF9500', symbol: 'flame' },
+    { id: SampleIDs.workList, name: 'Work', isBuiltIn: false, groupID: SampleIDs.areasGroup, order: 10, colorHex: '#007AFF', symbol: 'briefcase', completedAt: null },
+    { id: SampleIDs.homeList, name: 'Home', isBuiltIn: false, groupID: SampleIDs.areasGroup, order: 11, colorHex: '#34C759', symbol: 'house', completedAt: null },
+    { id: SampleIDs.readingList, name: 'Reading', isBuiltIn: false, groupID: null, order: 12, colorHex: '#AF52DE', symbol: 'book', completedAt: null },
+    { id: SampleIDs.siteProject, name: 'Website redesign', isBuiltIn: false, groupID: BuiltIn.projectsGroup, order: 13, colorHex: '#FF9500', symbol: 'flame', completedAt: null },
   )
 
   ROWS.forEach((r, i) => {

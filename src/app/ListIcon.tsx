@@ -164,6 +164,7 @@ export const SMART_SYMBOLS: Record<SmartView, string> = {
   today: 'star',
   calendar: 'gtdo.calendar',
   completed: 'gtdo.completed',
+  completedProjects: 'gtdo.completed',
   trash: 'gtdo.trash',
 }
 

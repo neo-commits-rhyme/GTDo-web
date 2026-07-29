@@ -19,6 +19,9 @@ export function useShortcuts(
   navigate: (item: SidebarItem) => void,
   openSettings: () => void,
   undo: UndoCenter,
+  /** False while the list on screen is date-sorted: [ and ] rewrite `order`,
+   *  which under a date sort would destroy the manual arrangement. */
+  reorderable = true,
 ) {
   const store = useStore()
 
@@ -80,6 +83,7 @@ export function useShortcuts(
         case '[':
         case ']': {
           // The accessible path sub-project 3's drag will layer over.
+          if (!reorderable) return
           const id = store.selectedTaskID
           if (id === null) return
           const task = store.task(id)

@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: neo-commits-rhyme/GTDo
-          ref: ac2f646545859d97be66c4a2532ea54c06702b85
+          ref: 657196c0c44d53f4791919f1d20c9b130d3c2634
           path: gtdo-swift
 
       - uses: actions/setup-node@v4

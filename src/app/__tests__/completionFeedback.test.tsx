@@ -41,7 +41,7 @@ async function mount() {
   render(
     <StoreContext.Provider value={store}>
       <UndoContext.Provider value={new UndoCenter(() => {})}>
-        <TaskList />
+        <TaskList sort="manual" setSort={() => {}} sortableListID={null} />
       </UndoContext.Provider>
     </StoreContext.Provider>,
   )

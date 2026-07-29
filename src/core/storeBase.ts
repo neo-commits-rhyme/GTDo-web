@@ -460,6 +460,9 @@ export class StoreBase {
     return Q.nextActionsCompletedTasks(this.queryContext)
   }
 
+  /** Projects that are finished, newest first — the Completed projects view. */
+  get completedProjects(): TaskList[] { return Q.completedProjects(this.queryContext) }
+
   /** The project a task lives in, or null. Non-null means the row is on loan to
    *  Next actions and should carry a project tag. */
   projectOf(t: TaskItem): TaskList | null { return Q.projectOf(this.queryContext, t) }

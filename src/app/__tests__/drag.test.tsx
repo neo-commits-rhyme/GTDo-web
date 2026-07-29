@@ -16,7 +16,7 @@ const NOW = new Date(2026, 6, 28, 9, 0, 0)
 /** Trash, Today and every other smart view drag with no list of their own, so
  *  the resolver's "already in that list" guard cannot fire from one. */
 const SMART_VIEW_DROP: DropContext = {
-  taskOrder: [], listID: null, gtdOrder: [], userOrder: [], groupMembers: {},
+  taskOrder: [], listID: null, gtdOrder: [], userOrder: [], groupMembers: {}, reorderable: true,
 }
 
 async function mount() {

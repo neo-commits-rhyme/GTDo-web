@@ -46,6 +46,7 @@ struct TaskList: Codable {
     var order: Int = 0
     var colorHex: String? = nil
     var symbol: String? = nil
+    var completedAt: Date? = nil
 }
 
 struct ListGroup: Codable {
@@ -71,6 +72,8 @@ let notes = UUID(uuidString: "00000000-0000-0000-0000-000000000005")!
 let projects = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
 let work = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
 let areas = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+let doneProject = UUID(uuidString: "CCCCCCCC-1111-2222-3333-444444444444")!
+let liveProject = UUID(uuidString: "DDDDDDDD-1111-2222-3333-444444444444")!
 
 // Whole seconds only: .iso8601 writes no fractional part, so a fractional date
 // would not survive the round trip and the byte-identity test would be wrong
@@ -111,6 +114,14 @@ let data = AppData(
         // A user list carrying every customization field.
         TaskList(id: work, name: "Work/Home", isBuiltIn: false, groupID: areas,
                  order: 5, colorHex: "#FF8800", symbol: "star.fill"),
+        // A finished project, so the fixture pins where completedAt lands in a
+        // sorted-keys encode — and a live one beside it, so the omitted case is
+        // pinned too.
+        TaskList(id: doneProject, name: "Kitchen remodel", isBuiltIn: false,
+                 groupID: projects, order: 6,
+                 completedAt: Date(timeIntervalSince1970: 1_785_000_000)),
+        TaskList(id: liveProject, name: "Site redesign", isBuiltIn: false,
+                 groupID: projects, order: 7),
     ],
     groups: [
         ListGroup(id: projects, name: "Projects", isBuiltIn: true, order: 0),

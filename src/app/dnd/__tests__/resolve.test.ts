@@ -10,6 +10,7 @@ const ctx = (over: Partial<DropContext> = {}): DropContext => ({
   gtdOrder: ['g1', 'g2', 'g3'],
   userOrder: ['u1', 'u2'],
   groupMembers: { areas: ['m1', 'm2', 'm3'] },
+  reorderable: true,
   ...over,
 })
 
@@ -85,5 +86,50 @@ describe('resolveDrop', () => {
   it('ignoresUnknownIdShapes', () => {
     expect(resolveDrop('nonsense', 'alsononsense', ctx())).toBeNull()
     expect(resolveDrop(dragID.task('a'), 'nonsense', ctx())).toBeNull()
+  })
+})
+
+
+describe('a date sort refuses reorders', () => {
+  it('returns null for a task dropped on another task', () => {
+    // The reorder would redistribute `order` to match date order, silently
+    // destroying the arrangement the user dragged by hand.
+    expect(resolveDrop(dragID.task('a'), dragID.task('c'), ctx({ reorderable: false }))).toBeNull()
+  })
+
+  it('still allows moving the task to another list', () => {
+    expect(resolveDrop(dragID.task('a'), dragID.listDrop(OTHER), ctx({ reorderable: false })))
+      .toEqual({ kind: 'move-task', taskID: 'a', listID: OTHER })
+  })
+})
+
+describe('sidebar drop targets', () => {
+  it('dates a task dropped on Today', () => {
+    expect(resolveDrop(dragID.task('a'), dragID.smartDrop('today'), ctx()))
+      .toEqual({ kind: 'date-today', taskID: 'a' })
+  })
+
+  it('trashes a task dropped on Trash', () => {
+    expect(resolveDrop(dragID.task('a'), dragID.smartDrop('trash'), ctx()))
+      .toEqual({ kind: 'trash-task', taskID: 'a' })
+  })
+
+  /** Calendar, Completed and Completed projects are computed from fields a
+   *  drop cannot meaningfully set. */
+  it('refuses the computed smart views', () => {
+    for (const view of ['calendar', 'completed', 'completedProjects']) {
+      expect(resolveDrop(dragID.task('a'), dragID.smartDrop(view), ctx())).toBeNull()
+    }
+  })
+
+  it('converts a task dropped on the Projects header', () => {
+    expect(resolveDrop(dragID.task('a'), dragID.projectsHeaderDrop(), ctx()))
+      .toEqual({ kind: 'convert-to-project', taskID: 'a' })
+  })
+
+  /** A date sort refuses reorders, but these are field changes, not reorders. */
+  it('still accepts them while the list is date-sorted', () => {
+    expect(resolveDrop(dragID.task('a'), dragID.smartDrop('today'), ctx({ reorderable: false })))
+      .toEqual({ kind: 'date-today', taskID: 'a' })
   })
 })

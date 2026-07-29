@@ -59,6 +59,21 @@
       "name" : "Work\/Home",
       "order" : 5,
       "symbol" : "star.fill"
+    },
+    {
+      "completedAt" : "2026-07-25T17:20:00Z",
+      "groupID" : "00000000-0000-0000-0000-0000000000AA",
+      "id" : "CCCCCCCC-1111-2222-3333-444444444444",
+      "isBuiltIn" : false,
+      "name" : "Kitchen remodel",
+      "order" : 6
+    },
+    {
+      "groupID" : "00000000-0000-0000-0000-0000000000AA",
+      "id" : "DDDDDDDD-1111-2222-3333-444444444444",
+      "isBuiltIn" : false,
+      "name" : "Site redesign",
+      "order" : 7
     }
   ],
   "tasks" : [

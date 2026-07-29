@@ -33,7 +33,8 @@ describe('Models', () => {
   })
 
   it('smartViewOrderIsTheSidebarOrder', () => {
-    expect(SMART_VIEWS).toEqual(['today', 'calendar', 'completed', 'trash'])
+    // Completed projects sits beside Completed, as it does on macOS.
+    expect(SMART_VIEWS).toEqual(['today', 'calendar', 'completed', 'completedProjects', 'trash'])
   })
 
   it('calendarBucketsAreCapitalisedLabels', () => {

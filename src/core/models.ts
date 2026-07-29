@@ -57,6 +57,20 @@ export type TaskList = {
   /** Customization (user lists only; null = default). "#RRGGBB" / SF Symbol. */
   colorHex: string | null
   symbol: string | null
+  /**
+   * When this project was finished; null while it is still running.
+   *
+   * Optional on the wire on purpose: a required field would make every
+   * data.json written before it existed fail to decode. It doubles as the sort
+   * key for the Completed projects view, the way TaskItem.completedAt does for
+   * completed tasks.
+   */
+  completedAt: Date | null
+}
+
+/** Computed, never stored, so it can never disagree with the date. */
+export function listIsCompleted(list: TaskList): boolean {
+  return list.completedAt !== null
 }
 
 export type ListGroup = { id: string; name: string; isBuiltIn: boolean; order: number }
@@ -76,9 +90,9 @@ export type AppData = {
 }
 
 /** Smart views are computed, never stored. */
-export type SmartView = 'today' | 'calendar' | 'completed' | 'trash'
+export type SmartView = 'today' | 'calendar' | 'completed' | 'completedProjects' | 'trash'
 /** Swift's CaseIterable order — this is the sidebar order. */
-export const SMART_VIEWS: SmartView[] = ['today', 'calendar', 'completed', 'trash']
+export const SMART_VIEWS: SmartView[] = ['today', 'calendar', 'completed', 'completedProjects', 'trash']
 
 /** Sidebar selection: a smart view or a stored list. */
 export type SidebarItem = { kind: 'smart'; view: SmartView } | { kind: 'list'; id: string }
@@ -147,6 +161,7 @@ export function repeatDisplayName(r: RepeatRule): string {
 export function seededAppData(): AppData {
   const list = (id: string, name: string, order: number): TaskList => ({
     id, name, isBuiltIn: true, groupID: null, order, colorHex: null, symbol: null,
+    completedAt: null,
   })
   return {
     tasks: [],

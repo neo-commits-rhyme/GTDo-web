@@ -119,6 +119,10 @@ function listJSON(l: TaskList, indent: number): string {
   if (l.groupID) e.push(['groupID', uuid(l.groupID)])
   if (l.colorHex) e.push(['colorHex', str(l.colorHex)])
   if (l.symbol) e.push(['symbol', str(l.symbol)])
+  // A finished project. Omitted when null so a document this app writes still
+  // decodes on a build that predates the field — and so the bytes match Swift,
+  // whose synthesized encoder uses encodeIfPresent.
+  if (l.completedAt) e.push(['completedAt', str(isoDate(l.completedAt))])
   return obj(e, indent)
 }
 
@@ -238,6 +242,7 @@ export function decodeAppData(raw: string): AppData {
       groupID: opt(l, 'groupID', path, asUUID),
       colorHex: opt(l, 'colorHex', path, asString),
       symbol: opt(l, 'symbol', path, asString),
+      completedAt: opt(l, 'completedAt', path, asDate),
     }
   })
 

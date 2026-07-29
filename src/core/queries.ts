@@ -12,7 +12,7 @@
 
 import { addDays, startOfDay } from './calendar'
 import type { AppData, CalendarBucket, TaskItem, TaskList } from './models'
-import { BuiltIn, sameID } from './models'
+import { BuiltIn, listIsCompleted, sameID } from './models'
 
 export type QueryContext = {
   data: AppData
@@ -85,10 +85,15 @@ function byCompletionNewestFirst(c: QueryContext) {
 }
 
 /** Starts from the raw task array, NOT from activeTasks — so it is not
- *  order-sorted first and has no stable secondary order. */
+ *  order-sorted first and has no stable secondary order.
+ *
+ *  Tasks of a finished project are excluded: a forty-task project completing in
+ *  one click would otherwise bury everything else finished that day. They are
+ *  seen by opening the project from Completed projects. */
 export function completedTasks(c: QueryContext): TaskItem[] {
   return c.data.tasks
     .filter((t) => c.rendersCompleted(t) && !t.isTrashed && !c.isHeldHidden(t))
+    .filter((t) => !belongsToCompletedProject(c, t))
     .sort(byCompletionNewestFirst(c))
 }
 
@@ -101,6 +106,7 @@ export function todayCompletedTasks(c: QueryContext): TaskItem[] {
   const today = dayOf(c.today)
   return c.data.tasks
     .filter((t) => c.rendersCompleted(t) && !t.isTrashed && !c.isHeldHidden(t))
+    .filter((t) => !belongsToCompletedProject(c, t))
     .filter((t) => t.dueDate !== null && dayOf(t.dueDate) <= today)
     .sort(byCompletionNewestFirst(c))
 }
@@ -150,9 +156,36 @@ export function projectOf(c: QueryContext, t: TaskItem): TaskList | null {
   return sameID(list.groupID, BuiltIn.projectsGroup) ? list : null
 }
 
+/**
+ * The number beside a group header, or null when there is nothing to say.
+ * Bare number: the header already says "Projects", so a "lists" unit only
+ * repeats what the row it sits on has established. Zero renders nothing, the
+ * same rule the row badges follow.
+ */
+export function groupCountLabel(count: number): string | null {
+  return count > 0 ? String(count) : null
+}
+
+/** Projects that are finished, newest first — the Completed projects view. */
+export function completedProjects(c: QueryContext): TaskList[] {
+  return c.data.lists
+    .filter((l) => l.groupID !== null && sameID(l.groupID, BuiltIn.projectsGroup) && listIsCompleted(l))
+    .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
+}
+
+/** True when this task lives in a project that has been finished. Its rows are
+ *  shown inside the project, not in the store-wide completed views. */
+export function belongsToCompletedProject(c: QueryContext, t: TaskItem): boolean {
+  const list = c.data.lists.find((l) => sameID(l.id, t.listID))
+  return list !== undefined && listIsCompleted(list)
+}
+
 /** Next actions' own tasks, plus every deadlined project task. */
 function belongsInNextActions(c: QueryContext, t: TaskItem): boolean {
   if (sameID(t.listID, BuiltIn.nextActions)) return true
+  // A finished project stops mirroring — otherwise every deadlined task of
+  // every project ever completed parks in the Next actions completed tail.
+  if (belongsToCompletedProject(c, t)) return false
   return t.dueDate !== null && isProjectList(c, t.listID)
 }
 
@@ -175,5 +208,9 @@ export function nextActionsCompletedTasks(c: QueryContext): TaskItem[] {
 /** All stored lists a task can move to, current list excluded. Returned
  *  UNSORTED, in raw insertion order. Passing null excludes nothing. */
 export function moveTargets(c: QueryContext, listID: string | null): TaskList[] {
-  return c.data.lists.filter((l) => listID === null || !sameID(l.id, listID))
+  // A finished project is not a target: filing new work into it would reopen a
+  // question the user has already closed.
+  return c.data.lists.filter(
+    (l) => !listIsCompleted(l) && (listID === null || !sameID(l.id, listID)),
+  )
 }

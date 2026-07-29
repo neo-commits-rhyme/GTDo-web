@@ -8,6 +8,9 @@ import { useState } from 'react'
 import { BuiltIn, sameID } from '../core/models'
 import { ReviewSheet } from './review/ReviewSheet'
 import { useStore, useStoreTick } from './useStore'
+import {
+  allowsReordering, sortTasks, LIST_SORTS, LIST_SORT_LABELS, type ListSort,
+} from '../core/sorting'
 
 type Section = { title: string | null; tasks: TaskItem[] }
 
@@ -40,6 +43,10 @@ function sectionsFor(store: ReturnType<typeof useStore>, selection: SidebarItem 
       case 'completed':
         // No add bar in Completed or Trash.
         return { title: 'Completed', canAdd: false, sections: [{ title: null, tasks: store.completedTasks }] }
+      case 'completedProjects':
+        // Rows here are PROJECTS, not tasks, so this view carries no task
+        // sections at all — CompletedProjects renders it instead.
+        return { title: 'Completed projects', canAdd: false, sections: [] }
       case 'trash':
         return { title: 'Trash', canAdd: false, sections: [{ title: null, tasks: store.trashedTasks }] }
     }
@@ -58,7 +65,12 @@ function sectionsFor(store: ReturnType<typeof useStore>, selection: SidebarItem 
   }
 }
 
-export function TaskList() {
+export function TaskList({ sort, setSort, sortableListID }: {
+  sort: ListSort
+  setSort: (s: ListSort) => void
+  /** Non-null only where a manual order exists to sort against. */
+  sortableListID: string | null
+}) {
   useStoreTick()
   const store = useStore()
   const [reviewing, setReviewing] = useState(false)
@@ -93,6 +105,16 @@ export function TaskList() {
     <div className="list">
       <div className="list__head">
         <h1 className="list__title">{title}</h1>
+        {sortableListID !== null && (
+          <label className="list__sort">
+            <span className="visually-hidden">Sort {title}</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as ListSort)}>
+              {LIST_SORTS.map((s) => (
+                <option key={s} value={s}>{LIST_SORT_LABELS[s]}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {isInbox && (
           <button
             type="button"
@@ -119,7 +141,16 @@ export function TaskList() {
       {populated.map((section, i) => (
         <section key={section.title ?? `main-${i}`} className="list__section">
           {section.title !== null && <h2 className="list__section-title">{section.title}</h2>}
-          <Rows tasks={section.tasks} tagProjects={isNextActions} />
+          {/* Only the live rows sort. The Completed tail stays newest-first: it
+              answers "what did I just finish", and resorting it would scatter
+              a just-ticked row away from the top. */}
+          <Rows
+            tasks={section.title === null && sortableListID !== null
+              ? sortTasks(section.tasks, sort)
+              : section.tasks}
+            tagProjects={isNextActions}
+            reorderable={section.title === null && allowsReordering(sort)}
+          />
         </section>
       ))}
       {canAdd && <AddBar />}
@@ -127,10 +158,20 @@ export function TaskList() {
   )
 }
 
-function Rows({ tasks, tagProjects = false }: { tasks: TaskItem[]; tagProjects?: boolean }) {
+function Rows({ tasks, tagProjects = false, reorderable = true }: {
+  tasks: TaskItem[]; tagProjects?: boolean; reorderable?: boolean
+}) {
   const store = useStore()
   return (
-    <SortableContext items={tasks.map((t) => dragID.task(t.id))} strategy={verticalListSortingStrategy}>
+    // disabled={{ droppable }} rather than dropping the SortableContext or
+    // disabling each row: the rows stay registered, so nothing remounts and the
+    // keyboard sensor keeps its announcements — the context simply refuses to
+    // be a reorder destination.
+    <SortableContext
+      items={tasks.map((t) => dragID.task(t.id))}
+      strategy={verticalListSortingStrategy}
+      disabled={{ draggable: !reorderable, droppable: !reorderable }}
+    >
       <ul className="rows">
         {tasks.map((t) => (
           <TaskRow

@@ -7,6 +7,9 @@ import { SaveFailureBanner } from './SaveFailureBanner'
 import { SearchField } from './SearchField'
 import { SettingsSheet } from './SettingsSheet'
 import { Sidebar } from './Sidebar'
+import { CompletedProjects } from './CompletedProjects'
+import { useListSort } from './listSort'
+import { allowsReordering, sortTasks } from '../core/sorting'
 import { TaskList } from './TaskList'
 import { useBreakpoint } from './useBreakpoint'
 import { useRoute } from './useRoute'
@@ -46,7 +49,13 @@ export function RootShell() {
   const undo = useUndoCenter()
 
   const openSettings = useCallback(() => setSettingsOpen(true), [])
-  useShortcuts(navigate, openSettings, undo)
+  // Derived before useShortcuts, which needs it to gate [ and ].
+  const selectedListID =
+    store.selection !== null && store.selection.kind === 'list' ? store.selection.id : null
+  // Searching shows ranked results, which have no manual order to sort against.
+  const sortableListID = store.searchQuery.trim() === '' ? selectedListID : null
+  const [sort, setSort] = useListSort(sortableListID)
+  useShortcuts(navigate, openSettings, undo, allowsReordering(sort))
 
   const detailID = store.selectedTaskID !== null && store.task(store.selectedTaskID) !== null
     ? store.selectedTaskID
@@ -56,18 +65,21 @@ export function RootShell() {
   // What a drop can mean right now: which tasks are on screen, which list they
   // belong to, and the current sidebar orders.
   const listID = store.selection !== null && store.selection.kind === 'list' ? store.selection.id : null
+  // Searching shows ranked results, which have no manual order to sort against.
+
   // ROWS ON SCREEN, not the list's own tasks: a drop's from/to are indices into
   // this array, and Next actions renders its own tasks *plus* every deadlined
   // project task. Reading the own-list array there made every mirrored row
   // undraggable (indexOf === -1) and moved the wrong row for the rest.
   const dropContext: DropContext = {
-    taskOrder: listID === null ? [] : store.tasksInView(listID).map((t) => t.id),
+    taskOrder: listID === null ? [] : sortTasks(store.tasksInView(listID), sort).map((t) => t.id),
     listID,
     gtdOrder: store.gtdSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),
     userOrder: store.userSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),
     groupMembers: Object.fromEntries(
       store.data.groups.map((g) => [g.id, store.listsInGroup(g.id).map((l) => l.id)]),
     ),
+    reorderable: allowsReordering(sort),
   }
 
   const goto = (item: SidebarItem) => {
@@ -107,7 +119,9 @@ export function RootShell() {
 
       {(!narrow || narrowPane === 'tasks') && (
         <main className="shell__main">
-          <TaskList />
+          {store.selection?.kind === 'smart' && store.selection.view === 'completedProjects'
+            ? <CompletedProjects onNavigate={goto} />
+            : <TaskList sort={sort} setSort={setSort} sortableListID={sortableListID} />}
         </main>
       )}
 

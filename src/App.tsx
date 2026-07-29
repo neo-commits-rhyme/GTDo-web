@@ -3,6 +3,7 @@ import { AppStore } from './core/store'
 import { IndexedDbAdapter, requestPersistentStorage } from './storage/indexedDbAdapter'
 import { TimerReminderSink } from './app/reminders/scheduler'
 import { markReported } from './app/reminders/lastSeen'
+import { pruneListSorts } from './app/listSort'
 import { RootShell } from './app/RootShell'
 import { StoreContext } from './app/useStore'
 import { UndoContext } from './app/undo/useUndo'
@@ -43,6 +44,9 @@ export function App() {
       // At launch only, once, and only when the preference is on — matching
       // macOS. There is no timer.
       if (autoEmptyTrashEnabled()) created.purgeTrash(30)
+      // Nothing removes a per-list sort when its list is deleted, and a
+      // recycled id would otherwise inherit a stranger's sort.
+      pruneListSorts(created.data.lists.map((l) => l.id))
       // Fire-and-forget: Firefox never settles this promise (assumptions §3).
       requestPersistentStorage()
       setStore(created)

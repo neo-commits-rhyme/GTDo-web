@@ -58,6 +58,7 @@ describe('AppStore lifecycle', () => {
     d.lists.push({
       id: '11111111-2222-3333-4444-555555555555', name: 'Work',
       isBuiltIn: false, groupID: null, order: 5, colorHex: null, symbol: null,
+      completedAt: null,
     })
     await a.persist(encodeAppData(d))
     const s = await AppStore.create(deps(a))
@@ -137,6 +138,7 @@ describe('AppStore lifecycle', () => {
     s.data.lists.push({
       id: '77777777-2222-3333-4444-555555555555', name: 'Added after launch',
       isBuiltIn: false, groupID: null, order: 6, colorHex: null, symbol: null,
+      completedAt: null,
     })
     clock = new Date(2026, 6, 28, 9, 6, 0)
     s.persist()
@@ -201,6 +203,7 @@ describe('AppStore lifecycle', () => {
     incoming.lists.push({
       id: '99999999-2222-3333-4444-555555555555', name: 'Imported',
       isBuiltIn: false, groupID: null, order: 9, colorHex: null, symbol: null,
+      completedAt: null,
     })
     s.importData(incoming)
 

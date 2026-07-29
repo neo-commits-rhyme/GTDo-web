@@ -136,6 +136,39 @@ describe('Persistence', () => {
     expect(encodeAppData(d)).toContain('"createdAt" : "2023-11-14T22:13:20Z"')
   })
 
+  // A completed project's timestamp lives on the list, and it is the receipt
+  // un-complete matches tasks against. Before this field was carried, a web
+  // round-trip dropped it silently: the project resurrected with all its tasks
+  // still ticked, and the bulk completion became impossible to undo.
+  it('testCompletedProjectSurvivesARoundTrip', () => {
+    const parsed = JSON.parse(FIXTURE)
+    const done = parsed.lists.find((l: { completedAt?: string }) => l.completedAt)
+    expect(done).toBeDefined()
+    const decoded = decodeAppData(FIXTURE)
+    const list = decoded.lists.find((l) => l.id === done.id)
+    expect(list?.completedAt).toEqual(new Date(done.completedAt))
+    expect(encodeAppData(decoded)).toBe(FIXTURE)
+  })
+
+  it('testLiveProjectEmitsNoCompletedAtKey', () => {
+    const d = seededAppData()
+    d.lists = [{ ...d.lists[0]!, completedAt: null }]
+    expect(encodeAppData(d)).not.toContain('"completedAt"')
+  })
+
+  it('testMissingCompletedAtDecodesAsNull', () => {
+    const parsed = JSON.parse(FIXTURE)
+    for (const l of parsed.lists) delete l.completedAt
+    const decoded = decodeAppData(JSON.stringify(parsed))
+    expect(decoded.lists.every((l) => l.completedAt === null)).toBe(true)
+  })
+
+  it('testMalformedListCompletedAtIsRejected', () => {
+    const parsed = JSON.parse(FIXTURE)
+    parsed.lists[0].completedAt = 'not a date'
+    expect(() => decodeAppData(JSON.stringify(parsed))).toThrow(DecodeError)
+  })
+
   it('testUnknownKeysIgnored', () => {
     const parsed = JSON.parse(FIXTURE)
     parsed.tasks[0].futureField = 'whatever'

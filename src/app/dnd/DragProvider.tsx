@@ -61,6 +61,25 @@ export function applyDrop(
     case 'reorder-in-group':
       store.moveListsInGroup(target.groupID, [target.from], target.to)
       break
+
+    // The three sidebar drops that are not a move. Each is a real field change,
+    // so each is undoable, and each snapshots the one task it touches.
+    case 'date-today':
+      undo.perform(undoLabel('moved', 1), [target.taskID], store,
+        () => store.addToToday(target.taskID))
+      break
+
+    case 'trash-task':
+      undo.perform(undoLabel('trashed', 1), [target.taskID], store,
+        () => store.trashTask(target.taskID))
+      break
+
+    case 'convert-to-project':
+      // Not undoable through the task snapshot: converting also CREATES a list,
+      // and UndoAction records created lists by id only. The store's own guard
+      // (a trashed task returns null) keeps the no-op case clean.
+      store.convertToProject(target.taskID)
+      break
   }
 }
 

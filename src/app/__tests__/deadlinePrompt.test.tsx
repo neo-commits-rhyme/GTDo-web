@@ -39,7 +39,7 @@ async function mount(clock = makeClock()) {
 }
 
 const dropContext: DropContext = {
-  taskOrder: [], listID: BuiltIn.notes, gtdOrder: [], userOrder: [], groupMembers: {},
+  taskOrder: [], listID: BuiltIn.notes, gtdOrder: [], userOrder: [], groupMembers: {}, reorderable: true,
 }
 
 const dateField = () => screen.getByLabelText('Deadline') as HTMLInputElement

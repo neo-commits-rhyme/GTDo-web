@@ -10,7 +10,7 @@ import { startOfDay } from './calendar'
 import { COMPLETION_HOLD_WINDOW_MS, loadInitialState, StoreBase, type StoreDeps } from './storeBase'
 import { taskTitles } from './taskImport'
 import {
-  BuiltIn, sameID, seededAppData, sidebarItemsEqual,
+  BuiltIn, listIsCompleted, sameID, seededAppData, sidebarItemsEqual,
   type ListGroup, type SidebarItem, type TaskItem, type TaskList, type RepeatRule,
 } from './models'
 import { nextOccurrence } from './recurrence'
@@ -343,6 +343,7 @@ export class AppStore extends StoreBase {
       order: Math.max(0, ...this.data.lists.map((l) => l.order)) + 1,
       colorHex: null,
       symbol: null,
+      completedAt: null,
     }
     this.data.lists.push(project)
     this.moveTask(id, project.id)
@@ -367,6 +368,7 @@ export class AppStore extends StoreBase {
       order: Math.max(0, ...this.data.lists.map((l) => l.order)) + 1,
       colorHex: null,
       symbol: null,
+      completedAt: null,
     }
     this.data.lists.push(list)
     this.persist()
@@ -636,16 +638,111 @@ export class AppStore extends StoreBase {
     this.moveTask(id, BuiltIn.waitingFor)
   }
 
+  // MARK: - Completing a project
+
+  /**
+   * Only a live project can be completed. Built-ins are never projects, so the
+   * group check alone is the guard — the command is hidden elsewhere rather
+   * than shown and inert.
+   */
+  canCompleteList(id: string): boolean {
+    const list = this.list(id)
+    if (list === null) return false
+    return list.groupID !== null && sameID(list.groupID, BuiltIn.projectsGroup)
+      && !listIsCompleted(list)
+  }
+
+  /** Open tasks that completing this project would close — drives the prompt. */
+  openTaskCount(projectID: string): number {
+    return this.incompleteTasks(projectID).length
+  }
+
+  /**
+   * Complete the project and everything still open in it.
+   *
+   * ONE synchronous pass and exactly one persist: split across several public
+   * calls, the write queue could go idle between them and another tab's
+   * document be adopted underneath, losing half the change. Deliberately not a
+   * loop over toggleCompleted, which would sound once per task, persist once
+   * per task, and spawn a fresh occurrence of every repeating task straight
+   * back into the project just finished. repeatRule is left intact so
+   * un-completing restores each task exactly as it was.
+   */
+  completeList(id: string): void {
+    if (!this.canCompleteList(id)) return
+    const i = this.data.lists.findIndex((l) => sameID(l.id, id))
+    if (i < 0) return
+    const stamp = this.now()
+    for (const t of this.data.tasks) {
+      if (sameID(t.listID, id) && !t.isTrashed && !t.isCompleted) {
+        t.isCompleted = true
+        t.completedAt = stamp
+        this.cancelReminder(t.id)
+      }
+    }
+    this.data.lists[i]!.completedAt = stamp
+    // The list is about to leave the sidebar; leaving the selection on it would
+    // strand the user on a list they can no longer navigate to.
+    if (sidebarItemsEqual(this.selection, { kind: 'list', id })) {
+      this.selection = { kind: 'smart', view: 'completedProjects' }
+    }
+    this.persist({ forceBackup: true })
+  }
+
+  /**
+   * Reopen the project, and with it exactly the tasks its completion closed —
+   * matched on the shared timestamp. A task ticked before the project was
+   * finished carries a different completedAt and stays completed.
+   *
+   * Compared by time value, not identity: a document that has been through
+   * encode/decode has distinct Date objects for the same instant.
+   */
+  uncompleteList(id: string): void {
+    const i = this.data.lists.findIndex((l) => sameID(l.id, id))
+    if (i < 0) return
+    const stamp = this.data.lists[i]!.completedAt
+    if (stamp === null) return
+    for (const t of this.data.tasks) {
+      if (sameID(t.listID, id) && t.completedAt?.getTime() === stamp.getTime()) {
+        t.isCompleted = false
+        t.completedAt = null
+      }
+    }
+    this.data.lists[i]!.completedAt = null
+    // While it was completed the group renumbered around it, so its stored slot
+    // may now collide with a live sibling's. Land it at the end instead.
+    const group = this.data.lists[i]!.groupID
+    const siblings = this.data.lists.filter(
+      (l) => !sameID(l.id, id) && (group === null ? l.groupID === null
+        : l.groupID !== null && sameID(l.groupID, group)),
+    )
+    this.data.lists[i]!.order = Math.max(-1, ...siblings.map((l) => l.order)) + 1
+    this.persist()
+    for (const t of this.data.tasks) if (sameID(t.listID, id)) this.syncReminder(t.id)
+  }
+
   // MARK: - Sidebar queries
 
   userGroups(): ListGroup[] {
     return this.data.groups.filter((g) => !g.isBuiltIn).sort((a, b) => a.order - b.order)
   }
 
+  /**
+   * The LIVE lists of a group — a finished project leaves the sidebar the way a
+   * completed task leaves its list, and shows up in Completed projects instead.
+   * This is the one chokepoint: the group's badge, its drag-reorder and the
+   * sidebar all read through it.
+   */
   listsInGroup(groupID: string | null): TaskList[] {
     return this.data.lists
       .filter((l) => (groupID === null ? l.groupID === null : l.groupID !== null && sameID(l.groupID, groupID)))
+      .filter((l) => !listIsCompleted(l))
       .sort((a, b) => a.order - b.order)
+  }
+
+  /** Lists filed under a group — the number beside a group header. */
+  listCount(groupID: string | null): number {
+    return this.listsInGroup(groupID).length
   }
 
   ungroupedUserLists(): TaskList[] {

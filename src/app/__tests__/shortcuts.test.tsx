@@ -152,6 +152,7 @@ describe('Transfer', () => {
     incoming.lists.push({
       id: '77777777-2222-3333-4444-555555555555', name: 'Imported',
       isBuiltIn: false, groupID: null, order: 9, colorHex: null, symbol: null,
+      completedAt: null,
     })
     importText(store, encodeAppData(incoming))
     expect(store.data.lists.map((l) => l.name)).toContain('Imported')

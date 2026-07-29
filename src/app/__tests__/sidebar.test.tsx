@@ -34,6 +34,7 @@ const groceries: TaskList = {
   order: 0,
   colorHex: null,
   symbol: null,
+  completedAt: null,
 }
 
 /** An export from a document that lost its Inbox: healingBuiltIns appends the

@@ -32,6 +32,13 @@ units.forEach((unit, i) => {
     repeatRule: { unit, interval: i + 1 },
   })
 })
+// A finished project alongside a live one. Without this the drift job proves
+// nothing about TaskList.completedAt: the Swift decoder only ever sees the keys
+// this encoder emits, so an optional field it never writes is unreachable.
+const finished = data.lists.find((l) => l.groupID === BuiltIn.projectsGroup)
+if (!finished) throw new Error('emit-fixture: sample data has no project to complete')
+finished.completedAt = new Date(Date.UTC(2026, 6, 27, 16, 30, 0))
+
 data.gtdOrder = [BuiltIn.nextActions, BuiltIn.waitingFor, BuiltIn.someday, BuiltIn.notes]
 data.userOrder = null
 
