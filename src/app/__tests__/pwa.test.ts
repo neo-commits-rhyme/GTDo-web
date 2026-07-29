@@ -23,8 +23,29 @@ describe('The manifest', () => {
     expect(sizes).toContain('512x512')
     for (const icon of manifest.icons) {
       expect(icon.src.startsWith(BASE), icon.src).toBe(true)
-      expect(existsSync(`public${icon.src.slice(BASE.length - 1)}`), icon.src).toBe(true)
+      // The ?v cache-buster is part of the request, not of the path on disk.
+      const onDisk = icon.src.split('?')[0]!.slice(BASE.length - 1)
+      expect(existsSync(`public${onDisk}`), icon.src).toBe(true)
     }
+  })
+
+  it('busTheIconCacheFromEveryPlaceThatAsksForIt', () => {
+    // A favicon sits in a browser cache of its own, keyed by URL and stickier
+    // than the page cache, so new bytes at the same path leave the old mark on
+    // screen. The ?v fixes that only while all three agree: index.html asks,
+    // the manifest asks, and the service worker precaches. A version that
+    // matches in two of the three silently caches an entry nobody requests.
+    const html = readFileSync('index.html', 'utf8')
+    const sw = readFileSync('scripts/build-sw.mjs', 'utf8')
+    const versions = new Set<string>()
+    for (const source of [html, sw, readFileSync('public/manifest.webmanifest', 'utf8')]) {
+      for (const m of source.matchAll(/icons\/icon-\d+\.png\?v=(\d+)/g)) versions.add(m[1]!)
+    }
+    expect(versions.size, `icon ?v disagrees across index/manifest/sw: ${[...versions]}`).toBe(1)
+    // And nothing may reference an icon without one, or that request is the
+    // one the browser answers from its stale cache.
+    expect(html).not.toMatch(/icons\/icon-\d+\.png(?!\?v=)/)
+    expect(readFileSync('public/manifest.webmanifest', 'utf8')).not.toMatch(/icons\/icon-\d+\.png(?!\?v=)/)
   })
 
   it('carriesAMaskableIconSoAndroidDoesNotLetterboxIt', () => {

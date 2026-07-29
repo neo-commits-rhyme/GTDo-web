@@ -1,8 +1,8 @@
 {
   "urls": [
     "/GTDo-web/manifest.webmanifest",
-    "/GTDo-web/icons/icon-192.png",
-    "/GTDo-web/icons/icon-192.png",
+    "/GTDo-web/icons/icon-192.png?v=2",
+    "/GTDo-web/icons/icon-192.png?v=2",
     "/GTDo-web/assets/index-CACv65zv.js",
     "/GTDo-web/assets/index-yMxvW0Uq.css"
   ]

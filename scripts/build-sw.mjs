@@ -13,7 +13,17 @@ const BASE = '/GTDo-web/'
 const dist = 'dist'
 
 const assets = readdirSync(`${dist}/assets`).map((f) => `${BASE}assets/${f}`)
-const shell = [BASE, `${BASE}manifest.webmanifest`, `${BASE}fonts/gtdo-serif.woff2`]
+// The icons are precached with everything else so a deploy refreshes them:
+// they live at unhashed paths, and the runtime handler below is cache-first,
+// so without this the old mark survives in Cache Storage. The ?v must match
+// what index.html and the manifest request, or this caches an unused entry.
+const shell = [
+  BASE,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}fonts/gtdo-serif.woff2`,
+  `${BASE}icons/icon-192.png?v=2`,
+  `${BASE}icons/icon-512.png?v=2`,
+]
 const precache = [...shell, ...assets]
 
 const version = createHash('sha256')

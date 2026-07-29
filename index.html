@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>GTDo</title>
     <link rel="manifest" href="/GTDo-web/manifest.webmanifest" />
-    <link rel="icon" href="/GTDo-web/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/GTDo-web/icons/icon-192.png" />
+    <!-- ?v is not decoration. A favicon lives in a browser cache of its own,
+         keyed by URL and far stickier than the page cache, so replacing the
+         bytes at the same path leaves the old mark on screen indefinitely.
+         Bump this whenever the icon changes. -->
+    <link rel="icon" href="/GTDo-web/icons/icon-192.png?v=2" />
+    <link rel="apple-touch-icon" href="/GTDo-web/icons/icon-192.png?v=2" />
     <meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#191817" media="(prefers-color-scheme: dark)" />
     <!--
