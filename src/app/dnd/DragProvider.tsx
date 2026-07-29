@@ -6,6 +6,7 @@ import {
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import type { AppStore } from '../../core/store'
+import { BuiltIn, sameID } from '../../core/models'
 import { undoLabel, type UndoCenter } from '../../core/undo'
 import { resolveDrop, type DropContext, type DropTarget } from './resolve'
 import { useStore, useStoreTick } from '../useStore'
@@ -23,7 +24,14 @@ export function applyDrop(
   switch (target.kind) {
     case 'reorder-task':
       undo.perform(undoLabel('moved', 1), context.taskOrder, store, () => {
-        store.moveIncompleteTasks(target.listID, [target.from], target.to)
+        // Next actions shows project tasks alongside its own, so its rows do
+        // not all belong to one list — the reorder has to run over what is on
+        // screen (see queries.ts, the mirror).
+        if (sameID(target.listID, BuiltIn.nextActions)) {
+          store.moveNextActions([target.from], target.to)
+        } else {
+          store.moveIncompleteTasks(target.listID, [target.from], target.to)
+        }
       })
       break
 

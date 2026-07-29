@@ -1,8 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { TaskItem } from '../core/models'
+import type { TaskItem, TaskList } from '../core/models'
 import { dragID } from './dnd/resolve'
 import { deadlineToken } from './format'
+import { ListIcon } from './ListIcon'
 import { playCompletionSound } from './sound'
 import { useStore } from './useStore'
 import { useSwipe } from './swipe/useSwipe'
@@ -11,8 +12,18 @@ import { useSwipe } from './swipe/useSwipe'
  * One row. The completion circle is a real button with aria-checked, and the
  * row body is a separate button that opens the detail pane — so both are
  * reachable from the keyboard without one swallowing the other.
+ *
+ * `projectTag` is set when the row is on loan to another list — Next actions
+ * showing a project's deadlined task — and the row then says which project it
+ * came from.
  */
-export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean }) {
+export function TaskRow({
+  task, selected, projectTag = null,
+}: {
+  task: TaskItem
+  selected: boolean
+  projectTag?: TaskList | null
+}) {
   const store = useStore()
   const completed = store.rendersCompleted(task)
   const token = deadlineToken(task.dueDate, store.today, completed)
@@ -69,6 +80,18 @@ export function TaskRow({ task, selected }: { task: TaskItem; selected: boolean 
         {task.note !== '' && <span className="row__note" aria-hidden="true">{task.note}</span>}
       </button>
 
+      {projectTag !== null && (
+        // Never colour alone: the tag carries the project's name as text, so a
+        // list with no colour set still reads correctly.
+        <span
+          className="row__project"
+          style={projectTag.colorHex === null ? undefined : { color: projectTag.colorHex }}
+          title={`From the project “${projectTag.name}”`}
+        >
+          <ListIcon symbol={projectTag.symbol} size={11} />
+          {projectTag.name}
+        </span>
+      )}
       {token !== null && (
         // Never colour alone: overdue changes the word and adds a glyph.
         <span className={`row__gutter${token.overdue ? ' row__gutter--overdue' : ''}`}>

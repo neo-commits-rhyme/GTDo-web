@@ -8,6 +8,7 @@
 
 import { startOfDay } from './calendar'
 import { COMPLETION_HOLD_WINDOW_MS, loadInitialState, StoreBase, type StoreDeps } from './storeBase'
+import { taskTitles } from './taskImport'
 import {
   BuiltIn, sameID, seededAppData, sidebarItemsEqual,
   type ListGroup, type SidebarItem, type TaskItem, type TaskList, type RepeatRule,
@@ -113,7 +114,23 @@ export class AppStore extends StoreBase {
    * the PRE-removal array, so moving item 0 down one requires destination 2.
    */
   moveIncompleteTasks(listID: string, from: number[], destination: number): void {
-    const tasks = this.incompleteTasks(listID)
+    this.moveTasksInSlots(this.incompleteTasks(listID), from, destination)
+  }
+
+  /**
+   * Reorder across the Next actions mirror. There is one `order` field per
+   * task, so dragging a project row here also moves it within its project — the
+   * same slot redistribution a plain list does, over the rows actually on
+   * screen.
+   */
+  moveNextActions(from: number[], destination: number): void {
+    this.moveTasksInSlots(this.nextActionsTasks, from, destination)
+  }
+
+  /** The shared body: redistributes an existing set of `order` slots among the
+   *  displayed tasks, so a view that shows tasks from more than one list can
+   *  reorder its rows without disturbing anything it doesn't show. */
+  private moveTasksInSlots(tasks: TaskItem[], from: number[], destination: number): void {
     const slots = tasks.map((t) => t.order).sort((a, b) => a - b)
 
     const moving = from.map((i) => tasks[i]).filter((t): t is TaskItem => t !== undefined)
@@ -450,6 +467,51 @@ export class AppStore extends StoreBase {
     this.selectedTaskID = null
     this.searchQuery = ''
     this.persist({ forceBackup: true })
+  }
+
+  // MARK: - Text import
+
+  /** Append a plain-text / CSV list to the Inbox, one line per task.
+   *  @returns how many tasks were created. */
+  importTasksFromText(text: string): number {
+    return this.importTasks(taskTitles(text))
+  }
+
+  /**
+   * Everything lands in the Inbox regardless of the current selection — an
+   * imported list is unprocessed capture, which is what the Inbox is for.
+   *
+   * One save for the whole file, not one per line: a 500-line list would
+   * otherwise write (and snapshot) the store 500 times. The save forces a
+   * backup, so a bulk import stays recoverable from a snapshot.
+   *
+   * @returns how many tasks were created.
+   */
+  importTasks(titles: string[]): number {
+    const clean = titles.map((t) => t.trim()).filter((t) => t !== '')
+    if (clean.length === 0) return 0
+    let order = Math.max(0, ...this.data.tasks.map((t) => t.order))
+    const createdAt = this.now()
+    for (const title of clean) {
+      order += 1
+      this.data.tasks.push({
+        id: newUUID(),
+        title,
+        note: '',
+        dueDate: null,
+        reminderDate: null,
+        listID: BuiltIn.inbox,
+        isCompleted: false,
+        completedAt: null,
+        isTrashed: false,
+        createdAt,
+        order,
+        repeatRule: null,
+        trashedAt: null,
+      })
+    }
+    this.persist({ forceBackup: true })
+    return clean.length
   }
 
   // MARK: - Deadline-required moves

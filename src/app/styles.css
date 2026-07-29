@@ -319,6 +319,29 @@ body {
 .row__gutter--overdue { color: var(--overdue); font-weight: 600; }
 .row__repeat { color: var(--ink-tertiary); }
 
+/* The project a mirrored Next actions row came from. Inherits the list's own
+   colour when it has one (set inline, as the sidebar does); the tint is drawn
+   from currentColor so an uncustomised list still reads as a quiet tag. */
+.row__project {
+  display: inline-flex; align-items: center; gap: 3px;
+  flex: 0 0 auto; max-width: 40%; min-width: 0;
+  font-size: 11px; line-height: 1.4; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  color: var(--ink-secondary);
+  padding: 1px 7px 1px 5px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+.row__project .list-icon { flex: 0 0 auto; }
+
+.import-tasks { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.import-tasks__button {
+  font: inherit; padding: 6px 12px; cursor: pointer; border-radius: 6px;
+  border: 1px solid var(--rule); background: var(--panel); color: var(--accent);
+}
+.import-tasks__button:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.import-tasks__message { color: var(--ink-secondary); font-size: 12px; margin: 0; }
+
 .addbar { display: flex; gap: 8px; margin-top: 18px; }
 .addbar__input {
   flex: 1; padding: 7px 9px; font: inherit; color: var(--ink);

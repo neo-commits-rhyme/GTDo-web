@@ -46,6 +46,11 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
     )
   }
 
+  /** What the row's badge counts: the rows the list actually opens with. Next
+   *  actions also shows every deadlined project task, and a badge that
+   *  disagrees with the list it opens reads as a bug. */
+  const rowCount = (id: string) => store.tasksInView(id).length
+
   const listLink = (id: string) => {
     const list = store.list(id)
     if (list === null) return null
@@ -54,7 +59,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
         <ListRow
           list={list}
           selected={isSelected({ kind: 'list', id })}
-          count={store.incompleteTasks(id).length}
+          count={rowCount(id)}
           onNavigate={() => onNavigate({ kind: 'list', id })}
           onEdit={() => setEditing(id)}
         />
@@ -91,7 +96,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
               <ListRow
                 list={entry.list}
                 selected={isSelected({ kind: 'list', id: entry.list.id })}
-                count={store.incompleteTasks(entry.list.id).length}
+                count={rowCount(entry.list.id)}
                 onNavigate={() => onNavigate({ kind: 'list', id: entry.list.id })}
                 onEdit={() => setEditing(entry.list.id)}
               />
@@ -141,7 +146,7 @@ export function Sidebar({ onNavigate }: { onNavigate: (item: SidebarItem) => voi
               <ListRow
                 list={entry.list}
                 selected={isSelected({ kind: 'list', id: entry.list.id })}
-                count={store.incompleteTasks(entry.list.id).length}
+                count={rowCount(entry.list.id)}
                 onNavigate={() => onNavigate({ kind: 'list', id: entry.list.id })}
                 onEdit={() => setEditing(entry.list.id)}
               />

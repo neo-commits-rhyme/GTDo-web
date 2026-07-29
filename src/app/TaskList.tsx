@@ -2,6 +2,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CALENDAR_BUCKETS, type SidebarItem, type TaskItem } from '../core/models'
 import { dragID } from './dnd/resolve'
 import { AddBar } from './AddBar'
+import { ImportTasksButton } from './ImportTasks'
 import { TaskRow } from './TaskRow'
 import { useState } from 'react'
 import { BuiltIn, sameID } from '../core/models'
@@ -45,12 +46,14 @@ function sectionsFor(store: ReturnType<typeof useStore>, selection: SidebarItem 
   }
 
   const list = store.list(selection.id)
+  // tasksInView, not incompleteTasks: Next actions also shows every deadlined
+  // project task, and the drag context reads the same method.
   return {
     title: list?.name ?? 'List',
     canAdd: true,
     sections: [
-      { title: null, tasks: store.incompleteTasks(selection.id) },
-      { title: 'Completed', tasks: store.completedTasksIn(selection.id) },
+      { title: null, tasks: store.tasksInView(selection.id) },
+      { title: 'Completed', tasks: store.completedInView(selection.id) },
     ],
   }
 }
@@ -59,10 +62,16 @@ export function TaskList() {
   useStoreTick()
   const store = useStore()
   const [reviewing, setReviewing] = useState(false)
+  // Owned here, not by the button: a successful import fills the Inbox, which
+  // unmounts the empty state the button lives in.
+  const [importMessage, setImportMessage] = useState<string | null>(null)
 
   const isInbox =
     store.selection !== null && store.selection.kind === 'list' &&
     sameID(store.selection.id, BuiltIn.inbox)
+  const isNextActions =
+    store.selection !== null && store.selection.kind === 'list' &&
+    sameID(store.selection.id, BuiltIn.nextActions)
   const reviewable = store.inboxReviewQueue().length
 
   const query = store.searchQuery.trim()
@@ -96,11 +105,21 @@ export function TaskList() {
         )}
       </div>
       {reviewing && <ReviewSheet onClose={() => setReviewing(false)} />}
-      {populated.length === 0 && <p className="list__empty">Nothing here yet.</p>}
+      {importMessage !== null && (
+        <p className="list__meta" role="status">{importMessage}</p>
+      )}
+      {populated.length === 0 && (
+        <>
+          <p className="list__empty">Nothing here yet.</p>
+          {/* The Inbox is where an imported list lands, so that is the one
+              empty state where the offer is worth making. */}
+          {isInbox && <ImportTasksButton store={store} onDone={setImportMessage} />}
+        </>
+      )}
       {populated.map((section, i) => (
         <section key={section.title ?? `main-${i}`} className="list__section">
           {section.title !== null && <h2 className="list__section-title">{section.title}</h2>}
-          <Rows tasks={section.tasks} />
+          <Rows tasks={section.tasks} tagProjects={isNextActions} />
         </section>
       ))}
       {canAdd && <AddBar />}
@@ -108,13 +127,21 @@ export function TaskList() {
   )
 }
 
-function Rows({ tasks }: { tasks: TaskItem[] }) {
+function Rows({ tasks, tagProjects = false }: { tasks: TaskItem[]; tagProjects?: boolean }) {
   const store = useStore()
   return (
     <SortableContext items={tasks.map((t) => dragID.task(t.id))} strategy={verticalListSortingStrategy}>
       <ul className="rows">
         {tasks.map((t) => (
-          <TaskRow key={t.id} task={t} selected={store.selectedTaskID === t.id} />
+          <TaskRow
+            key={t.id}
+            task={t}
+            selected={store.selectedTaskID === t.id}
+            // Only in Next actions, where a mirrored row has to say which
+            // project it came from. Everywhere else the row already sits under
+            // the list it belongs to.
+            projectTag={tagProjects ? store.projectOf(t) : null}
+          />
         ))}
       </ul>
     </SortableContext>

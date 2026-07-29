@@ -12,7 +12,7 @@
 
 import { addDays, startOfDay } from './calendar'
 import type { AppData, CalendarBucket, TaskItem, TaskList } from './models'
-import { sameID } from './models'
+import { BuiltIn, sameID } from './models'
 
 export type QueryContext = {
   data: AppData
@@ -123,6 +123,52 @@ export function completedTasksIn(c: QueryContext, listID: string): TaskItem[] {
       (t) =>
         sameID(t.listID, listID) && c.rendersCompleted(t) && !t.isTrashed && !c.isHeldHidden(t),
     )
+    .sort(byCompletionNewestFirst(c))
+}
+
+/**
+ * THE NEXT ACTIONS MIRROR. Port of AppStore+Projects.swift.
+ *
+ * A task sitting in a project with a deadline on it is, by definition, a
+ * committed next action — so Next actions shows it alongside its own tasks. It
+ * is *shown*, not moved: `listID` still points at the project, which is what
+ * keeps it in the project's own list, keeps the project tag on the row correct,
+ * and means completing it from either place is the same task.
+ */
+
+/** Lists filed under the built-in Projects group. */
+export function isProjectList(c: QueryContext, listID: string): boolean {
+  const list = c.data.lists.find((l) => sameID(l.id, listID))
+  return list !== undefined && list.groupID !== null && sameID(list.groupID, BuiltIn.projectsGroup)
+}
+
+/** The project a task lives in, or null when it doesn't live in one. Drives the
+ *  project tag on a mirrored row. */
+export function projectOf(c: QueryContext, t: TaskItem): TaskList | null {
+  const list = c.data.lists.find((l) => sameID(l.id, t.listID))
+  if (list === undefined || list.groupID === null) return null
+  return sameID(list.groupID, BuiltIn.projectsGroup) ? list : null
+}
+
+/** Next actions' own tasks, plus every deadlined project task. */
+function belongsInNextActions(c: QueryContext, t: TaskItem): boolean {
+  if (sameID(t.listID, BuiltIn.nextActions)) return true
+  return t.dueDate !== null && isProjectList(c, t.listID)
+}
+
+/** The incomplete rows of the Next actions view, own and mirrored together in
+ *  one order-sorted list. */
+export function nextActionsTasks(c: QueryContext): TaskItem[] {
+  return activeTasks(c).filter((t) => !c.rendersCompleted(t) && belongsInNextActions(c, t))
+}
+
+/** The completed tail of the Next actions view, mirrored the same way — a
+ *  project task ticked here stays visible where it was ticked instead of
+ *  vanishing to a list the user isn't looking at. */
+export function nextActionsCompletedTasks(c: QueryContext): TaskItem[] {
+  return c.data.tasks
+    .filter((t) => c.rendersCompleted(t) && !t.isTrashed && !c.isHeldHidden(t))
+    .filter((t) => belongsInNextActions(c, t))
     .sort(byCompletionNewestFirst(c))
 }
 

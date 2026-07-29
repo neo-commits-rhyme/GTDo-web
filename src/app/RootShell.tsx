@@ -56,8 +56,12 @@ export function RootShell() {
   // What a drop can mean right now: which tasks are on screen, which list they
   // belong to, and the current sidebar orders.
   const listID = store.selection !== null && store.selection.kind === 'list' ? store.selection.id : null
+  // ROWS ON SCREEN, not the list's own tasks: a drop's from/to are indices into
+  // this array, and Next actions renders its own tasks *plus* every deadlined
+  // project task. Reading the own-list array there made every mirrored row
+  // undraggable (indexOf === -1) and moved the wrong row for the rest.
   const dropContext: DropContext = {
-    taskOrder: listID === null ? [] : store.incompleteTasks(listID).map((t) => t.id),
+    taskOrder: listID === null ? [] : store.tasksInView(listID).map((t) => t.id),
     listID,
     gtdOrder: store.gtdSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),
     userOrder: store.userSectionItems().map((e) => (e.kind === 'list' ? e.list.id : e.group.id)),

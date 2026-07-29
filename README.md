@@ -33,6 +33,15 @@ Settings → **Export data.json** produces exactly the file the macOS app reads.
 Drop it at `~/Library/Application Support/GTDo/data.json` and it opens there.
 Settings → **Import data.json** goes the other way.
 
+Settings → **Import tasks from a file…** is a different thing: a `.txt` or
+`.csv` holding one task per line, which lands in the Inbox (the empty Inbox
+offers the same button). Leading `1.` / `12)` / `-` / `•` / `[ ]` markers are
+stripped, blank lines skipped, tabs and double spaces collapsed, and UTF-8,
+UTF-16 and Windows-1251 all read correctly. A comma splits columns only when
+the file has a `Task,…` header row — otherwise the whole line is the task.
+Anything that is not a list of text lines (an image, a huge file, a `data.json`)
+is named and skipped rather than imported.
+
 The format compatibility is not a hope — CI decodes this app's output using the
 macOS app's own `Models.swift` on every push and fails if the two ever
 disagree — 42 tasks, 9 lists, byte-identical in both directions.
@@ -45,7 +54,11 @@ disagree — 42 tasks, 9 lists, byte-identical in both directions.
   Moving a task into *Next actions* or *Waiting for...* asks for a deadline first;
   moving into *Someday* deliberately strips the deadline and any repeat.
 - **Projects** — a built-in group. "Convert to project" turns a task into a list
-  and moves the task into it, keeping every field.
+  and moves the task into it, keeping every field. A project task **with a
+  deadline** also shows up in *Next actions*, tagged with its project's name
+  (and colour and symbol, if the list has them). It is shown there, not moved:
+  completing it from either place completes the one task, and clearing the
+  deadline drops it back out.
 - Recurring tasks: set Repeat in the detail pane. Completing one spawns the next
   occurrence, skipping any that were missed rather than spawning into the past.
 - Completing a task holds its row in place for half a second, so running down a

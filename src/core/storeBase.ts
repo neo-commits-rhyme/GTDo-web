@@ -452,6 +452,38 @@ export class StoreBase {
     return Q.completedTasksIn(this.queryContext, listID)
   }
 
+  // MARK: - The Next actions mirror (see queries.ts)
+
+  get nextActionsTasks(): TaskItem[] { return Q.nextActionsTasks(this.queryContext) }
+
+  get nextActionsCompletedTasks(): TaskItem[] {
+    return Q.nextActionsCompletedTasks(this.queryContext)
+  }
+
+  /** The project a task lives in, or null. Non-null means the row is on loan to
+   *  Next actions and should carry a project tag. */
+  projectOf(t: TaskItem): TaskList | null { return Q.projectOf(this.queryContext, t) }
+
+  /**
+   * The incomplete rows a stored list actually renders — its own, plus the Next
+   * actions mirror.
+   *
+   * The one source for the list, its sidebar badge, and the drag context, which
+   * MUST agree: a drop's from/to are indices into the rows on screen, so a
+   * caller that reads `incompleteTasks` instead makes every mirrored row
+   * undraggable and moves the wrong row for the rest.
+   */
+  tasksInView(listID: string): TaskItem[] {
+    return sameID(listID, BuiltIn.nextActions) ? this.nextActionsTasks : this.incompleteTasks(listID)
+  }
+
+  /** The completed tail the same list renders. */
+  completedInView(listID: string): TaskItem[] {
+    return sameID(listID, BuiltIn.nextActions)
+      ? this.nextActionsCompletedTasks
+      : this.completedTasksIn(listID)
+  }
+
   moveTargets(excludingListID: string | null): TaskList[] {
     return Q.moveTargets(this.queryContext, excludingListID)
   }

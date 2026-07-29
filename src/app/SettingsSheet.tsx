@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SnapshotMeta } from '../core/ports'
+import { ImportTasksButton } from './ImportTasks'
 import { downloadExport, importText, restoreSnapshot } from './transfer'
 import { useStore, useStoreTick } from './useStore'
 import { useResolvedScheme, type ThemeChoice } from './theme/useTheme'
@@ -133,6 +134,13 @@ export function SettingsSheet({
           </label>
         </div>
         {error !== null && <p className="settings__error" role="alert">{error}</p>}
+
+        <h3>Import a task list</h3>
+        <p className="settings__note">
+          A .txt or .csv file with one task per line lands in the Inbox. Numbering,
+          bullets and checkboxes are stripped; blank lines are skipped.
+        </p>
+        <ImportTasksButton store={store} className="settings__import" />
 
         <h3>Restore a snapshot</h3>
         {snapshots.length === 0 ? (
