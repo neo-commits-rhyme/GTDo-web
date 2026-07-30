@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor,
-  closestCenter, useSensor, useSensors,
+  closestCenter, pointerWithin, useSensor, useSensors,
   type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
@@ -126,11 +126,28 @@ export function DragProvider({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  // Nothing collides with a drag the store would refuse, so no row lights up as
-  // a target that would swallow the drop and do nothing with it.
-  const collisionDetection: CollisionDetection = (args) => (
-    dragRefusal(store, String(args.active.id)) === null ? closestCenter(args) : []
-  )
+  /**
+   * Nothing collides with a drag the store would refuse, so no row lights up as
+   * a target that would swallow the drop and do nothing with it.
+   *
+   * Otherwise: where the pointer is, then — only if it is over nothing — what is nearest.
+   *
+   * closestCenter alone compares the DRAGGED ROW's centre to each target's, and
+   * a row is the full width of the list: parking the pointer on a sidebar item
+   * still left that centre far to the right, nearer another row than the
+   * sidebar. Dropping a task on a list to file it therefore resolved to a
+   * neighbouring row — or, with one row on screen, to the dragged row itself —
+   * and did nothing at all. Which of the two happened was pure geometry, so it
+   * looked intermittent.
+   *
+   * pointerWithin needs a pointer, so a keyboard drag returns nothing from it
+   * and falls through to closestCenter, which is what that path always used.
+   */
+  const collisionDetection: CollisionDetection = (args) => {
+    if (dragRefusal(store, String(args.active.id)) !== null) return []
+    const under = pointerWithin(args)
+    return under.length > 0 ? under : closestCenter(args)
+  }
 
   const onDragStart = (e: DragStartEvent) => setActiveID(String(e.active.id))
 
