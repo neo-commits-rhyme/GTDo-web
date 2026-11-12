@@ -121,6 +121,16 @@ export class StoreBase {
   protected hold = new CompletionHold()
   private subscribers = new Set<() => void>()
 
+  /**
+   * Called when a save carries a document that differs from the last one — the
+   * signal a sync layer needs to know there is something to upload. Not a
+   * subscriber: those fire for view state too, and a selection change is not
+   * an edit.
+   */
+  onDocumentChange: (() => void) | null = null
+  /** True while adoptRemote is saving: that document came from the cloud. */
+  private adoptingRemote = false
+
   constructor(deps: StoreDeps, init: InitialState) {
     this.adapter = deps.adapter
     this.now = deps.now
@@ -247,6 +257,11 @@ export class StoreBase {
     }
 
     const encoded = encodeAppData(this.data)
+    // Compared rather than assumed: a save that changed nothing must not look
+    // like an edit, or an idle device would outrank a newer cloud copy.
+    if (!this.adoptingRemote && encoded !== (this.pendingEncoded ?? this.lastKnownGood)) {
+      this.onDocumentChange?.()
+    }
 
     // Snapshot the last-known-good record BEFORE overwriting it, throttled so a
     // burst of edits doesn't write a copy per keystroke.
@@ -339,6 +354,42 @@ export class StoreBase {
     // loadSampleData deliberately do not — sample reminders are metadata, not
     // alerts to fire.
     this.armAllReminders()
+  }
+
+  /**
+   * Replace the document with one a sync layer fetched, reporting whether it
+   * was taken. Declines for the same reasons adoptExternalWrite does — bytes
+   * being guarded, changes that are not on disk, an undo still on offer — and
+   * the caller is expected to offer it again later.
+   *
+   * Unlike importData it keeps the user where they are when that place still
+   * exists, and it does not raise onDocumentChange: what arrived from the
+   * cloud is not something to send back. The replaced document is snapshotted
+   * first, so it stays restorable from Settings.
+   *
+   * Throws if `raw` does not decode, leaving the store untouched.
+   */
+  adoptRemote(raw: string): boolean {
+    if (this.refusingToOverwrite) return false
+    if (this.saveError !== null) return false
+    if (this.hasPendingUndo()) return false
+
+    const data = this.healingBuiltIns(decodeAppData(raw))
+    this.data = data
+    if (this.selection !== null && this.selection.kind === 'list' && this.list(this.selection.id) === null) {
+      this.selection = { kind: 'smart', view: 'today' }
+    }
+    if (this.selectedTaskID !== null && this.task(this.selectedTaskID) === null) this.selectedTaskID = null
+    this.pendingDeadline = null
+
+    this.adoptingRemote = true
+    try {
+      this.persist({ forceBackup: true })
+    } finally {
+      this.adoptingRemote = false
+    }
+    this.armAllReminders()
+    return true
   }
 
   /** Overridden in AppStore, which owns syncReminder. */

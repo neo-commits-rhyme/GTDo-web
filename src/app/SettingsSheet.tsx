@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { SnapshotMeta } from '../core/ports'
 import { ImportTasksButton } from './ImportTasks'
-import { downloadExport, importText, restoreSnapshot } from './transfer'
+import { downloadExport, exportBytes, importText, restoreSnapshot } from './transfer'
+import { syncNow, useSyncStatus, type SyncStatus } from './sync/syncRunner'
+import { telegram } from '../telegram'
 import { useStore, useStoreTick } from './useStore'
 import { useResolvedScheme, type ThemeChoice } from './theme/useTheme'
 import { ACCENTS, type AccentID } from './theme/accents'
@@ -13,6 +15,13 @@ export const AUTO_EMPTY_TRASH_KEY = 'gtdo.autoEmptyTrash'
 /** Default OFF, matching macOS — nothing deletes itself unless asked. */
 export function autoEmptyTrashEnabled(): boolean {
   return localStorage.getItem(AUTO_EMPTY_TRASH_KEY) === 'true'
+}
+
+function syncLine(sync: SyncStatus): string {
+  if (sync.phase === 'syncing') return 'Syncing…'
+  if (sync.phase === 'error') return `Couldn’t sync: ${sync.error ?? 'unknown error'}`
+  if (sync.lastSyncedAt === null) return 'Not synced yet'
+  return `Synced at ${new Date(sync.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export function SettingsSheet({
@@ -31,6 +40,22 @@ export function SettingsSheet({
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [sound, setSound] = useState(completionSoundEnabled)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const sync = useSyncStatus()
+  const inTelegram = telegram.active()
+
+  // Telegram's in-app browser does not reliably save a download, so there the
+  // file's text goes to the clipboard instead.
+  const copyExport = async () => {
+    setError(null)
+    setNotice(null)
+    try {
+      await navigator.clipboard.writeText(exportBytes(store))
+      setNotice('Copied. Paste it into a file named data.json to use it in the macOS app.')
+    } catch {
+      setError('Couldn’t copy to the clipboard.')
+    }
+  }
 
   useEffect(() => { void store.listSnapshots().then(setSnapshots) }, [store])
 
@@ -115,12 +140,64 @@ export function SettingsSheet({
           <span>Auto-empty Trash after 30 days</span>
         </label>
 
+        {inTelegram && (
+          <>
+            <h3>Telegram sync</h3>
+            {sync.available ? (
+              <>
+                <p className="settings__note">
+                  Your tasks are saved on this device and mirrored to your Telegram account’s cloud
+                  storage, so they follow you to Telegram on your other devices. If two devices
+                  change them while one is offline, the later change wins.
+                </p>
+                <div className="settings__actions">
+                  <button type="button" disabled={sync.phase === 'syncing'} onClick={() => syncNow()}>
+                    Sync now
+                  </button>
+                  <span className={sync.phase === 'error' ? 'settings__error' : 'settings__note'} role="status">
+                    {syncLine(sync)}
+                  </span>
+                </div>
+                {sync.incomplete && (
+                  <>
+                    <p className="settings__note">
+                      Another device may have stopped halfway through saving. If this keeps
+                      happening, replace the cloud copy with what is on this device.
+                    </p>
+                    <div className="settings__actions">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Replace your tasks in Telegram on every other device with what is on this one?')) {
+                            syncNow('push')
+                          }
+                        }}
+                      >
+                        Upload this device’s tasks
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="settings__note">
+                This version of Telegram has no cloud storage, so your tasks stay on this device.
+                Update Telegram to sync between devices.
+              </p>
+            )}
+          </>
+        )}
+
         <h3>Your data</h3>
         <p className="settings__note">
-          Everything lives in this browser. Export to move it to the macOS app or another device.
+          {inTelegram
+            ? 'Export to move it to the macOS app, or to keep a copy of your own.'
+            : 'Everything lives in this browser. Export to move it to the macOS app or another device.'}
         </p>
         <div className="settings__actions">
-          <button type="button" onClick={() => downloadExport(store)}>Export data.json</button>
+          {inTelegram
+            ? <button type="button" onClick={() => void copyExport()}>Copy data.json</button>
+            : <button type="button" onClick={() => downloadExport(store)}>Export data.json</button>}
           <label className="settings__import">
             Import data.json
             <input
@@ -134,6 +211,7 @@ export function SettingsSheet({
           </label>
         </div>
         {error !== null && <p className="settings__error" role="alert">{error}</p>}
+        {notice !== null && <p className="settings__note" role="status">{notice}</p>}
 
         <h3>Import a task list</h3>
         <p className="settings__note">

@@ -530,3 +530,14 @@ p.detail__hint { margin: -6px 0 0; }
   color: var(--ink-tertiary); cursor: pointer; padding: 2px 4px;
 }
 .nav__row-action:hover { color: var(--ink); text-decoration: underline; }
+
+/* ---------------------------------------------------------------- Telegram */
+
+/* As a Telegram Mini App the page can sit under Telegram's own chrome, and
+   Telegram reports those insets itself. Both are zero unless it overlays us. */
+html.tg {
+  --tg-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  --tg-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
+}
+html.tg .shell { padding-top: var(--tg-top); padding-bottom: var(--tg-bottom); }
+html.tg .shell--narrow .shell__detail--overlay { padding-bottom: var(--tg-bottom); }

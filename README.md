@@ -139,11 +139,32 @@ Chrome, the install icon in the address bar; on iOS, Share → Add to Home Scree
 Installed or not, **it works with no network at all.** Nothing is fetched from a
 server while you use it, so there is nothing to lose when the connection goes.
 
+## In Telegram
+
+The same page is a Telegram Mini App. Opened inside Telegram it follows
+Telegram's light/dark setting, uses its Back button and haptics, and mirrors
+your tasks to your Telegram account's CloudStorage, so they follow you to
+Telegram on your other devices.
+
+That is the one place this app's data leaves the device, and it goes to
+Telegram, not to anyone hosting this page. Sync is whole-document and the later
+change wins: edit on two devices while one is offline and the earlier edit is
+replaced — though the replaced document is snapshotted first and stays
+restorable from Settings. Opened in a plain browser, none of this runs and
+nothing is loaded from Telegram.
+
+Set it up once in [@BotFather](https://t.me/BotFather): `/newbot`, then
+`/newapp` (or **Bot Settings → Menu Button**) with this page's URL.
+
+To try it without Telegram, run the dev server and open
+`http://localhost:5173/GTDo-web/?tgmock` — a stand-in whose CloudStorage lives
+in `localStorage`. It is never bundled into a production build.
+
 ## Development
 
 ```bash
 npm install
-npm test          # 535 unit tests
+npm test          # unit tests
 npm run dev
 npm run build
 ```

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TOKENS } from './tokens'
+import { telegram } from '../../telegram'
 
 /**
  * System / Light / Dark, persisted in localStorage.
@@ -70,12 +71,18 @@ function syncThemeColor(choice: ThemeChoice): void {
  * effect, which is far too late to be the only place it happens.
  */
 function apply(choice: ThemeChoice): void {
-  if (choice === 'system') document.documentElement.removeAttribute('data-theme')
-  else document.documentElement.setAttribute('data-theme', choice)
+  // Inside Telegram, "system" is Telegram's own light/dark setting — the host
+  // the app is sitting in — which need not match the OS.
+  const hosted = choice === 'system' ? telegram.colorScheme() : choice
+  if (hosted === null) document.documentElement.removeAttribute('data-theme')
+  else document.documentElement.setAttribute('data-theme', hosted)
   syncThemeColor(choice)
+  if (hosted !== null) telegram.setChrome(hosted)
 }
 
 function systemScheme(): Scheme {
+  const hosted = telegram.colorScheme()
+  if (hosted !== null) return hosted
   // No matchMedia outside a browser (jsdom has none at all); light is what the
   // stylesheet falls back to anyway.
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light'
@@ -95,10 +102,14 @@ export function useResolvedScheme(choice: ThemeChoice): Scheme {
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return undefined
     const query = window.matchMedia(DARK_QUERY)
-    const update = () => { setSystem(query.matches ? 'dark' : 'light') }
+    const update = () => { setSystem(systemScheme()) }
     update()
     query.addEventListener('change', update)
-    return () => { query.removeEventListener('change', update) }
+    const offTelegram = telegram.onThemeChanged(update)
+    return () => {
+      query.removeEventListener('change', update)
+      offTelegram()
+    }
   }, [])
 
   return choice === 'system' ? system : choice
@@ -109,6 +120,8 @@ export function useTheme(): [ThemeChoice, (c: ThemeChoice) => void] {
 
   useEffect(() => {
     apply(choice)
+    // Telegram can change scheme while the app is open; "system" follows it.
+    return telegram.onThemeChanged(() => { apply(choice) })
   }, [choice])
 
   const set = useCallback((next: ThemeChoice) => {

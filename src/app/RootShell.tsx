@@ -22,6 +22,7 @@ import type { DropContext } from './dnd/resolve'
 import { CatchUpBanner } from './reminders/CatchUpBanner'
 import { UndoBar } from './undo/UndoBar'
 import { useUndoCenter } from './undo/useUndo'
+import { useTelegramBack } from './useTelegramBack'
 
 /**
  * Layout A: sidebar 240 | task list | detail.
@@ -89,6 +90,12 @@ export function RootShell() {
 
   const narrow = breakpoint === 'narrow'
   const detailIsOverlay = breakpoint !== 'wide'
+
+  // Inside Telegram its Back button peels off whatever is on top. Registered
+  // bottom layer first, so that when two are showing the upper one answers.
+  useTelegramBack(narrow && narrowPane === 'lists', () => setNarrowPane('tasks'))
+  useTelegramBack(detailID !== null && detailIsOverlay, closeDetail)
+  useTelegramBack(settingsOpen, () => setSettingsOpen(false))
 
   return (
     <DragProvider context={dropContext}>

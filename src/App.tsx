@@ -9,6 +9,8 @@ import { StoreContext } from './app/useStore'
 import { UndoContext } from './app/undo/useUndo'
 import { UndoCenter } from './core/undo'
 import { autoEmptyTrashEnabled } from './app/SettingsSheet'
+import { startSync } from './app/sync/syncRunner'
+import { telegram } from './telegram'
 import './app/styles.css'
 
 const undoCentre = new UndoCenter()
@@ -41,9 +43,16 @@ export function App() {
       // ever set — which is exactly what shipped before an end-to-end test
       // actually watched for a notification.
       created.armAllReminders()
+      // Inside Telegram the document is mirrored to its cloud storage. The
+      // first sync goes before any launch housekeeping: purging a stale local
+      // copy would count as a fresh edit and outrank the newer one in the cloud.
+      const cloud = telegram.cloudKV()
+      const synced = cloud === null
+        ? Promise.resolve()
+        : startSync(created, cloud, () => telegram.haptic('impact'))
       // At launch only, once, and only when the preference is on — matching
       // macOS. There is no timer.
-      if (autoEmptyTrashEnabled()) created.purgeTrash(30)
+      void synced.then(() => { if (autoEmptyTrashEnabled()) created.purgeTrash(30) })
       // Nothing removes a per-list sort when its list is deleted, and a
       // recycled id would otherwise inherit a stranger's sort.
       pruneListSorts(created.data.lists.map((l) => l.id))
